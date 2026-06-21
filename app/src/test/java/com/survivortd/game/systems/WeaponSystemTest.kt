@@ -22,9 +22,6 @@ class WeaponSystemTest {
         weaponSys = WeaponSystem(state)
     }
 
-    // ================================================================
-    // ADD/UPGRADE WEAPONS
-    // ================================================================
     @Nested
     @DisplayName("Weapon management")
     inner class WeaponManagement {
@@ -49,11 +46,9 @@ class WeaponSystemTest {
                 weaponSys.addWeapon(WeaponType.entries[i])
             }
             assertEquals(6, weaponSys.weapons.size)
-            // Upgrade first weapon to level 3, then add a 7th
             repeat(2) { weaponSys.upgradeWeapon(WeaponType.entries[0]) }
             weaponSys.addWeapon(WeaponType.LASER_BEAM)
             assertEquals(6, weaponSys.weapons.size)
-            // First weapon should still be there (it's strongest)
             assertTrue(weaponSys.weapons.any { it.type == WeaponType.entries[0] })
         }
 
@@ -70,12 +65,10 @@ class WeaponSystemTest {
         @DisplayName("Weapon evolves at level 5 with catalyst")
         fun weaponEvolution() {
             weaponSys.addWeapon(WeaponType.ASSAULT_RIFLE)
-            weaponSys.addPassive(PassiveType.POWER_CORE)  // Catalyst for AR
-            // Upgrade to level 5
+            weaponSys.addPassive(PassiveType.POWER_CORE)
             repeat(4) { weaponSys.upgradeWeapon(WeaponType.ASSAULT_RIFLE) }
             assertEquals(5, weaponSys.weapons[0].level)
             assertFalse(weaponSys.weapons[0].isEvolved)
-            // Next upgrade should evolve it
             assertTrue(weaponSys.upgradeWeapon(WeaponType.ASSAULT_RIFLE))
             assertTrue(weaponSys.weapons[0].isEvolved)
             assertEquals(6, weaponSys.weapons[0].level)
@@ -85,16 +78,11 @@ class WeaponSystemTest {
         @DisplayName("Weapon does NOT evolve without catalyst")
         fun noEvolutionWithoutCatalyst() {
             weaponSys.addWeapon(WeaponType.ASSAULT_RIFLE)
-            // No passive catalyst
             repeat(4) { weaponSys.upgradeWeapon(WeaponType.ASSAULT_RIFLE) }
-            assertFalse(weaponSys.upgradeWeapon(WeaponType.ASSAULT_RIFLE),
-                "Should fail to evolve without catalyst")
+            assertFalse(weaponSys.upgradeWeapon(WeaponType.ASSAULT_RIFLE))
         }
     }
 
-    // ================================================================
-    // PASSIVE ITEMS
-    // ================================================================
     @Nested
     @DisplayName("Passive items")
     inner class PassiveTests {
@@ -112,14 +100,10 @@ class WeaponSystemTest {
                 assertTrue(weaponSys.addPassive(PassiveType.POWER_CORE))
             }
             assertEquals(5, weaponSys.passives[0].stacks)
-            assertFalse(weaponSys.addPassive(PassiveType.POWER_CORE),
-                "Should not stack beyond 5")
+            assertFalse(weaponSys.addPassive(PassiveType.POWER_CORE))
         }
     }
 
-    // ================================================================
-    // FIRING TESTS
-    // ================================================================
     @Nested
     @DisplayName("Weapon firing")
     inner class FiringTests {
@@ -127,31 +111,209 @@ class WeaponSystemTest {
         @DisplayName("Assault Rifle fires at nearest enemy")
         fun assaultRifleFires() {
             weaponSys.addWeapon(WeaponType.ASSAULT_RIFLE)
+            val playerPos = state.positions[state.playerIndex]
             val enemyId = state.spawnEnemy(
-                x = state.positions[state.playerIndex].x + 100f,
-                y = state.positions[state.playerIndex].y,
+                x = playerPos.x + 100f,
+                y = playerPos.y,
                 enemyType = EnemyComponent.EnemyData.ZOMBIE
             )
             val hpBefore = state.healths[enemyId].currentHp
-            weaponSys.update(0.5f)  // Trigger fire (cooldown = 0.5s)
-            assertTrue(state.healths[enemyId].currentHp < hpBefore,
-                "Enemy HP should decrease after AR fire")
+            weaponSys.update(0.6f)
+            assertTrue(state.healths[enemyId].currentHp < hpBefore)
         }
 
         @Test
         @DisplayName("Spread Gun creates multiple projectiles")
         fun spreadGunFires() {
             weaponSys.addWeapon(WeaponType.SPREAD_GUN)
+            val playerPos = state.positions[state.playerIndex]
             state.spawnEnemy(
-                x = state.positions[state.playerIndex].x + 100f,
-                y = state.positions[state.playerIndex].y,
+                x = playerPos.x + 100f,
+                y = playerPos.y,
                 enemyType = EnemyComponent.EnemyData.ZOMBIE
             )
-            val projBefore = state.projectiles.count { p -> p.damage > 5f }
-            weaponSys.update(1f)  // Trigger fire
-            // Should have spawned multiple projectiles
-            val projAfter = state.projectiles.count { p -> p.damage > 5f }
-            assertTrue(projAfter > projBefore, "Spread Gun should spawn projectiles")
+            val projBefore = countActiveProjectiles()
+            weaponSys.update(1.0f)
+            val projAfter = countActiveProjectiles()
+            assertTrue(projAfter > projBefore)
         }
 
-        @T...[truncated]
+        @Test
+        @DisplayName("Katana melee hits enemy in front")
+        fun katanaHitsEnemy() {
+            weaponSys.addWeapon(WeaponType.KATANA)
+            val playerPos = state.positions[state.playerIndex]
+            val enemyId = state.spawnEnemy(
+                x = playerPos.x + 60f,
+                y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val hpBefore = state.healths[enemyId].currentHp
+            weaponSys.update(1.0f)
+            assertTrue(state.healths[enemyId].currentHp < hpBefore)
+        }
+
+        @Test
+        @DisplayName("Force Field damages nearby enemies continuously")
+        fun forceFieldDamages() {
+            weaponSys.addWeapon(WeaponType.FORCE_FIELD)
+            val playerPos = state.positions[state.playerIndex]
+            val enemyId = state.spawnEnemy(
+                x = playerPos.x + 40f,
+                y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val hpBefore = state.healths[enemyId].currentHp
+            weaponSys.update(1.0f)
+            assertTrue(state.healths[enemyId].currentHp < hpBefore)
+        }
+
+        @Test
+        @DisplayName("Frost Nova damages and slows enemies")
+        fun frostNovaDamages() {
+            weaponSys.addWeapon(WeaponType.FROST_NOVA)
+            val playerPos = state.positions[state.playerIndex]
+            val enemyId = state.spawnEnemy(
+                x = playerPos.x + 80f,
+                y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val hpBefore = state.healths[enemyId].currentHp
+            weaponSys.update(1.0f)
+            assertTrue(state.healths[enemyId].currentHp < hpBefore)
+            // Check slow status applied
+            if (enemyId < state.statusEffects.size) {
+                val hasSlow = state.statusEffects[enemyId].effects.any {
+                    it.type == com.survivortd.game.config.StatusEffectType.SLOW
+                }
+                assertTrue(hasSlow, "Enemy should have slow effect")
+            }
+        }
+
+        @Test
+        @DisplayName("Healing Pulse heals player")
+        fun healingPulseHeals() {
+            weaponSys.addWeapon(WeaponType.HEALING_PULSE)
+            val playerHealth = state.healths[state.playerIndex]
+            playerHealth.currentHp = 20f
+            weaponSys.update(5.0f)
+            assertTrue(playerHealth.currentHp > 20f, "Player should be healed")
+        }
+
+        @Test
+        @DisplayName("Laser Beam instantly damages nearest enemy")
+        fun laserBeamDamages() {
+            weaponSys.addWeapon(WeaponType.LASER_BEAM)
+            val playerPos = state.positions[state.playerIndex]
+            val enemyId = state.spawnEnemy(
+                x = playerPos.x + 100f,
+                y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val hpBefore = state.healths[enemyId].currentHp
+            weaponSys.update(2.0f)
+            assertTrue(state.healths[enemyId].currentHp < hpBefore)
+        }
+
+        @Test
+        @DisplayName("Rocket Launcher fires AoE projectile")
+        fun rocketFires() {
+            weaponSys.addWeapon(WeaponType.ROCKET_LAUNCHER)
+            val playerPos = state.positions[state.playerIndex]
+            state.spawnEnemy(
+                x = playerPos.x + 100f,
+                y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val projBefore = countActiveProjectiles()
+            weaponSys.update(2.0f)
+            val projAfter = countActiveProjectiles()
+            assertTrue(projAfter > projBefore)
+        }
+
+        @Test
+        @DisplayName("Boomerang fires piercing projectile")
+        fun boomerangFires() {
+            weaponSys.addWeapon(WeaponType.BOOMERANG)
+            val playerPos = state.positions[state.playerIndex]
+            state.spawnEnemy(
+                x = playerPos.x + 100f,
+                y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val projBefore = countActiveProjectiles()
+            weaponSys.update(2.0f)
+            val projAfter = countActiveProjectiles()
+            assertTrue(projAfter > projBefore)
+        }
+
+        @Test
+        @DisplayName("Landmine drops at player position")
+        fun landmineDrops() {
+            weaponSys.addWeapon(WeaponType.LANDMINE)
+            val projBefore = countActiveProjectiles()
+            weaponSys.update(2.0f)
+            val projAfter = countActiveProjectiles()
+            assertTrue(projAfter > projBefore)
+        }
+
+        @Test
+        @DisplayName("Drone fires at nearest enemy")
+        fun droneFires() {
+            weaponSys.addWeapon(WeaponType.DRONE)
+            val playerPos = state.positions[state.playerIndex]
+            state.spawnEnemy(
+                x = playerPos.x + 100f,
+                y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val projBefore = countActiveProjectiles()
+            weaponSys.update(2.0f)
+            val projAfter = countActiveProjectiles()
+            assertTrue(projAfter > projBefore)
+        }
+    }
+
+    @Nested
+    @DisplayName("Passive multipliers")
+    inner class PassiveMultiplierTests {
+        @Test
+        @DisplayName("Power Core increases damage")
+        fun powerCoreDamageBoost() {
+            weaponSys.addWeapon(WeaponType.ASSAULT_RIFLE)
+            weaponSys.addPassive(PassiveType.POWER_CORE)
+            val playerPos = state.positions[state.playerIndex]
+            val enemyId = state.spawnEnemy(
+                x = playerPos.x + 100f,
+                y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val hpWithoutPassive = state.healths[enemyId].currentHp
+            weaponSys.update(0.6f)
+            val damageWithPassive = hpWithoutPassive - state.healths[enemyId].currentHp
+
+            // Compare to base damage (8 at level 1) — with 15% boost should be ~9.2
+            assertTrue(damageWithPassive > 8f, "Damage should be boosted by Power Core")
+        }
+
+        @Test
+        @DisplayName("Weapon does not fire without enemies")
+        fun noFireWithoutEnemies() {
+            weaponSys.addWeapon(WeaponType.ASSAULT_RIFLE)
+            val projBefore = countActiveProjectiles()
+            weaponSys.update(1.0f)
+            val projAfter = countActiveProjectiles()
+            assertEquals(projBefore, projAfter, "Should not fire with no enemies")
+        }
+    }
+
+    private fun countActiveProjectiles(): Int {
+        var count = 0
+        for (i in state.projectiles.indices) {
+            if (i < state.tags.size && state.tags[i].tag == com.survivortd.game.components.TagComponent.EntityTag.PROJECTILE) {
+                if (!state.healths[i].isDead) count++
+            }
+        }
+        return count
+    }
+}
