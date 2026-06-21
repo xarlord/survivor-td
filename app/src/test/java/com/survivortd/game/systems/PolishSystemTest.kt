@@ -152,10 +152,14 @@ class PolishSystemTest {
         fun onBossAttackCombo() {
             feel.onBossAttack()
             feel.update(0.016f)
-            // Shake should be active
-            assertTrue(feel.shakeOffsetX != 0f || feel.shakeOffsetY != 0f)
+            // During hit-stop, game is frozen but damage flash + hitstop are active
             assertTrue(feel.isHitStopActive)
             assertTrue(feel.damageFlash > 0f)
+
+            // Wait for hit-stop to end, then shake should activate
+            repeat(10) { feel.update(0.016f) }  // ~0.16s, hit-stop is 0.08s
+            assertTrue(feel.shakeOffsetX != 0f || feel.shakeOffsetY != 0f,
+                "Shake should be active after hit-stop ends")
         }
 
         @Test
