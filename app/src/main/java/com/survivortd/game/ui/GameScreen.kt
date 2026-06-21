@@ -41,7 +41,10 @@ import androidx.compose.ui.unit.sp
 import com.survivortd.game.components.RenderComponent
 import com.survivortd.game.core.GameState
 import com.survivortd.game.core.GameLoop
+import com.survivortd.game.systems.LevelUpSystem
+import com.survivortd.game.systems.UpgradeChoice
 import com.survivortd.game.systems.VirtualJoystick
+import com.survivortd.game.systems.WeaponSystem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -59,9 +62,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun GameScreen(
     gameState: GameState,
-    gameLoop: GameLoop,
-    onPause: () -> Unit,
     onGameOver: () -> Unit,
+    onExit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Only these trigger recomposition for UI — NOT game positions
@@ -78,6 +80,39 @@ fun GameScreen(
     var joystickKnob by remember { mutableStateOf(Offset.Zero) }
 
     val joystick = remember { VirtualJoystick(gameState) }
+
+    // Level-up system state
+    val weaponSystem = remember { WeaponSystem(gameState) }
+    val levelUpSystem = remember { LevelUpSystem(gameState, weaponSystem) }
+    var levelUpChoices by remember { mutableStateOf<List<UpgradeChoice>>(emptyList()) }
+
+    // Create game loop with integrated systems
+    val movementSystem = remember { com.survivortd.game.systems.MovementSystem(gameState) }
+    val combatSystem = remember { com.survivortd.game.systems.CombatSystem(gameState) }
+    val enemyAiSystem = remember { com.survivortd.game.systems.EnemyAISystem(gameState) }
+    val pickupSystem = remember { com.survivortd.game.systems.PickupSystem(gameState) }
+    val projectileSystem = remember { com.survivortd.game.systems.ProjectileSystem(gameState) }
+    val gameLoop = remember(gameState) {
+        GameLoop(
+            onUpdate = { dt ->
+                if (gameState.isPaused || gameState.isGameOver) return@GameLoop
+                // System update order matters: AI → Movement → Combat → Weapons → Projectiles → Pickups
+                enemyAiSystem.update(dt)
+                movementSystem.update(dt)
+                combatSystem.update(dt)
+                weaponSystem.update(dt)
+                projectileSystem.update(dt)
+                pickupSystem.update(dt)
+                gameState.elapsedSeconds += dt
+                gameState.cleanupDeadEntities()
+            },
+            onRender = { /* Canvas redraws via drawBehind */ }
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        gameLoop.start(this)
+    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -109,6 +144,24 @@ fun GameScreen(
             gold = hudGold,
             modifier = Modifier.align(Alignment.TopCenter)
         )
+
+        // === LAYER 3: Level-Up Dialog ===
+        if (levelUpChoices.isNotEmpty()) {
+            LevelUpDialog(
+                level = hudLevel,
+                choices = levelUpChoices,
+                onChoiceSelected = { choice ->
+                    levelUpSystem.applyChoice(choice)
+                    if (gameState.pendingLevelUps > 0) {
+                        // Another level-up queued — generate new choices
+                        levelUpChoices = levelUpSystem.generateChoices()
+                    } else {
+                        levelUpChoices = emptyList()
+                        gameState.isPaused = false
+                    }
+                }
+            )
+        }
     }
 
     // Update HUD values at 10Hz (every 100ms) — NOT every frame
@@ -124,6 +177,13 @@ fun GameScreen(
             }
             hudTime = (900 - gameState.elapsedSeconds).toLong().coerceAtLeast(0)
             hudScore = gameState.score
+
+            // Check for level-up → generate choices and pause game
+            if (gameState.pendingLevelUps > 0 && levelUpChoices.isEmpty()) {
+                gameState.isPaused = true
+                levelUpChoices = levelUpSystem.generateChoices()
+            }
+
             if (gameState.isGameOver) {
                 onGameOver()
                 break
