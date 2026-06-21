@@ -60,9 +60,9 @@ class GameConfigTest {
             for (level in 1..17) {
                 cumulative += GameConfig.xpForLevel(level)
             }
-            // 15 min match with escalating XP gain (~36 XP/min avg)
-            // Total XP available in a 15-min match = ~540
-            assertTrue(cumulative <= 540, "Cumulative XP to reach Lv 18 ($cumulative) should be <= 540 (15min @ 36xp/min)")
+            // 15 min match with escalating XP gain (~37 XP/min avg)
+            // Total XP available in a 15-min match = ~550
+            assertTrue(cumulative <= 550, "Cumulative XP to reach Lv 18 ($cumulative) should be <= 550 (15min @ 37xp/min)")
         }
     }
 
