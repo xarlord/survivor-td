@@ -72,10 +72,17 @@ data class TagComponent(
 data class EnemyComponent(
     var type: EnemyData = EnemyData.ZOMBIE,
     var knockbackResist: Float = 1f,
-    var aiState: AiState = AiState.CHASE
+    var aiState: AiState = AiState.CHASE,
+    var aiTimer: Float = 0f,          // General-purpose attack/cooldown timer
+    var specialTimer: Float = 0f,     // Charge/special ability timer
+    var phase: Int = 0,               // Boss phase (0,1,2,3)
+    var targetId: Int = -1,           // For healer/shielder targeting
+    var spawnX: Float = 0f,          // Remember spawn position for spitter kiting
+    var spawnY: Float = 0f,
+    var zigzagPhase: Float = 0f      // For runner/flyer erratic movement
 ) {
     enum class EnemyData { ZOMBIE, RUNNER, BRUTE, SPITTER, BOMBER, HEALER, SHIELDER, FLYER, ELITE, BOSS }
-    enum class AiState { CHASE, ATTACK, FLEE, SUMMON, SPECIAL }
+    enum class AiState { CHASE, ATTACK, FLEE, SUMMON, SPECIAL, CHARGE, KITE, SUPPORT }
 }
 
 /**

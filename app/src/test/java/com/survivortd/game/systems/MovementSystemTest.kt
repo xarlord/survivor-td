@@ -61,15 +61,18 @@ class MovementSystemTest {
     }
 
     @Test
-    @DisplayName("Enemy moves towards player")
+    @DisplayName("Enemy moves towards player when AI + movement both run")
     fun enemyChasesPlayer() {
         val enemyId = state.spawnEnemy(
             x = 0f,
             y = 0f,
             enemyType = com.survivortd.game.components.EnemyComponent.EnemyData.ZOMBIE
         )
+        // In the new architecture, EnemyAISystem sets velocity, then MovementSystem applies it
+        val ai = EnemyAISystem(state)
+        ai.update(0.016f)      // Sets zombie velocity toward player
         val startPos = state.positions[enemyId].x
-        movement.update(1f)
+        movement.update(0.016f) // Integrates velocity → position
         val endPos = state.positions[enemyId].x
         assertTrue(endPos > startPos, "Enemy should move towards player (positive X)")
     }

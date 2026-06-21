@@ -81,39 +81,28 @@ class MovementSystem(
     }
 
     /**
-     * Enemy movement: steer towards player.
+     * Enemy movement: integrate velocity → position.
+     * Velocity is set by EnemyAISystem; this system just applies it.
      */
     private fun updateEnemies(dt: Float) {
         if (state.playerIndex < 0 || state.playerIndex >= state.positions.size) return
-        val playerPos = state.positions[state.playerIndex]
 
         for (i in state.enemies.indices) {
             if (i >= state.positions.size) break
             if (i >= state.velocities.size) break
+            if (i >= state.tags.size) break
+            if (state.tags[i].tag != com.survivortd.game.components.TagComponent.EntityTag.ENEMY) continue
+            if (state.healths[i].isDead) continue
+
             val pos = state.positions[i]
-            val enemy = state.enemies[i]
+            val vel = state.velocities[i]
 
-            // Direction towards player
-            val dx = playerPos.x - pos.x
-            val dy = playerPos.y - pos.y
-            val dist = sqrt(dx * dx + dy * dy)
+            pos.x += vel.x * dt
+            pos.y += vel.y * dt
 
-            if (dist > 1f) {
-                val speed = when (enemy.type) {
-                    EnemyComponent.EnemyData.ZOMBIE -> 80f
-                    EnemyComponent.EnemyData.RUNNER -> 160f
-                    EnemyComponent.EnemyData.BRUTE -> 60f
-                    EnemyComponent.EnemyData.SPITTER -> 50f
-                    EnemyComponent.EnemyData.BOMBER -> 100f
-                    EnemyComponent.EnemyData.HEALER -> 70f
-                    EnemyComponent.EnemyData.SHIELDER -> 80f
-                    EnemyComponent.EnemyData.FLYER -> 120f
-                    EnemyComponent.EnemyData.ELITE -> 96f
-                    EnemyComponent.EnemyData.BOSS -> 50f
-                }
-                pos.x += (dx / dist) * speed * dt
-                pos.y += (dy / dist) * speed * dt
-            }
+            // Clamp to world bounds (enemies can't leave the arena)
+            pos.x = pos.x.coerceIn(-100f, GameConfig.WORLD_WIDTH + 100f)
+            pos.y = pos.y.coerceIn(-100f, GameConfig.WORLD_HEIGHT + 100f)
         }
     }
 }
