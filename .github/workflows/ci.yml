@@ -42,7 +42,6 @@ jobs:
       - name: Verify tests exist for changed Kotlin files
         run: |
           BASE_BRANCH="${{ github.base_ref || 'master' }}"
-          # If no base_ref (push event), compare against HEAD~1
           if [ -z "$BASE_BRANCH" ]; then
             BASE_BRANCH="HEAD~1"
           fi
@@ -53,9 +52,7 @@ jobs:
           fi
           FAIL=0
           for FILE in $CHANGED; do
-            # Skip MainActivity and UI files (no logic to test)
             BASE=$(basename "$FILE" .kt)
-            # Look for matching test file
             if ! find . -name "${BASE}Test.kt" -o -name "${BASE}Should.kt" 2>/dev/null | grep -q .; then
               echo "⚠️  No test file found for: $FILE"
               FAIL=1
@@ -79,6 +76,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v3
-      - name: Run connected Android tests
-        run: ./gradlew connectedDevDebugAndroidTest
-    continue-on-error: true  # E2E requires emulator — advisory only for now
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0777", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run instrumentation tests on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          script: ./gradlew connectedDevDebugAndroidTest
+          emulator-build: 11353
