@@ -2,6 +2,7 @@ package com.survivortd.game.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,15 +35,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.components.RenderComponent
-import com.survivortd.game.core.GameInput
-import com.survivortd.game.core.GameLoop
 import com.survivortd.game.core.GameState
-import com.survivortd.game.core.InputType
+import com.survivortd.game.core.GameLoop
+import com.survivortd.game.systems.VirtualJoystick
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -52,7 +51,7 @@ import kotlinx.coroutines.launch
  * Root game screen. Manages the strict rendering layer hierarchy:
  *   1. Game Canvas (background + ECS entities via drawBehind)
  *   2. HUD Overlay (Compose composables — HP, XP, timer)
- *   3. Pause Dialog Overlay
+ *   3. Virtual Joystick (floating, left-half of screen)
  *
  * CRITICAL: Game state is read inside drawBehind lambdas, NOT as Compose
  * State objects. This prevents recomposition cascades that destroy FPS.
@@ -71,8 +70,14 @@ fun GameScreen(
     var hudLevel by remember { mutableIntStateOf(1) }
     var hudTime by remember { mutableLongStateOf(0L) }
     var hudScore by remember { mutableLongStateOf(0L) }
+    var hudGold by remember { mutableIntStateOf(0) }
 
-    val scope = CoroutineScope(Dispatchers.Default)
+    // Joystick visual state — triggers redraw at ~60Hz
+    var joystickActive by remember { mutableStateOf(false) }
+    var joystickAnchor by remember { mutableStateOf(Offset.Zero) }
+    var joystickKnob by remember { mutableStateOf(Offset.Zero) }
+
+    val joystick = remember { VirtualJoystick(gameState) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -81,10 +86,16 @@ fun GameScreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        // === LAYER 1: Game Canvas ===
+        // === LAYER 1: Game Canvas + Touch Input ===
         GameCanvasView(
             gameState = gameState,
-            gameLoop = gameLoop,
+            joystick = joystick,
+            joystickActive = joystickActive,
+            joystickAnchor = joystickAnchor,
+            joystickKnob = joystickKnob,
+            onJoystickActiveChange = { joystickActive = it },
+            onJoystickAnchorChange = { joystickAnchor = it },
+            onJoystickKnobChange = { joystickKnob = it },
             modifier = Modifier.fillMaxSize()
         )
 
@@ -95,6 +106,7 @@ fun GameScreen(
             level = hudLevel,
             secondsRemaining = hudTime,
             score = hudScore,
+            gold = hudGold,
             modifier = Modifier.align(Alignment.TopCenter)
         )
     }
@@ -106,7 +118,9 @@ fun GameScreen(
             if (gameState.players.isNotEmpty() && gameState.playerIndex >= 0) {
                 val player = gameState.players[minOf(gameState.playerIndex, gameState.players.size - 1)]
                 hudLevel = player.level
-                hudXp = player.currentXp.toFloat() / player.xpToNext.toFloat()
+                hudXp = if (player.xpToNext > 0)
+                    player.currentXp.toFloat() / player.xpToNext.toFloat() else 0f
+                hudGold = player.gold
             }
             hudTime = (900 - gameState.elapsedSeconds).toLong().coerceAtLeast(0)
             hudScore = gameState.score
@@ -120,13 +134,18 @@ fun GameScreen(
 }
 
 /**
- * Game canvas — renders all entities via drawBehind.
- * Reads game state INSIDE the draw lambda (no recomposition cascade).
+ * Game canvas — renders all entities + joystick via drawBehind.
  */
 @Composable
 private fun GameCanvasView(
     gameState: GameState,
-    gameLoop: GameLoop,
+    joystick: VirtualJoystick,
+    joystickActive: Boolean,
+    joystickAnchor: Offset,
+    joystickKnob: Offset,
+    onJoystickActiveChange: (Boolean) -> Unit,
+    onJoystickAnchorChange: (Offset) -> Unit,
+    onJoystickKnobChange: (Offset) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Canvas(
@@ -138,20 +157,34 @@ private fun GameCanvasView(
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.first()
-                        gameLoop.queueInput(
-                            GameInput(
-                                tick = gameState.currentTick,
-                                type = if (change.pressed) InputType.JOYSTICK_MOVE else InputType.JOYSTICK_RELEASE,
-                                x = change.position.x,
-                                y = change.position.y
-                            )
-                        )
+                        val pos = change.position
+
+                        when {
+                            change.pressed && !joystick.active() -> {
+                                joystick.onTouchDown(pos.x, pos.y)
+                                onJoystickActiveChange(true)
+                                onJoystickAnchorChange(Offset(pos.x, pos.y))
+                                onJoystickKnobChange(Offset(pos.x, pos.y))
+                            }
+                            change.pressed && joystick.active() -> {
+                                joystick.onTouchMove(pos.x, pos.y)
+                                val (kx, ky) = joystick.knobPosition()
+                                onJoystickKnobChange(Offset(kx, ky))
+                            }
+                            !change.pressed && joystick.active() -> {
+                                joystick.onTouchUp()
+                                onJoystickActiveChange(false)
+                            }
+                        }
                     }
                 }
             }
     ) {
         drawGameBackground()
         drawEntities(gameState)
+        if (joystickActive) {
+            drawJoystick(joystickAnchor, joystickKnob)
+        }
     }
 }
 
@@ -192,7 +225,6 @@ private fun DrawScope.drawEntities(state: GameState) {
                 )
             }
             RenderComponent.RenderShape.TRIANGLE -> {
-                // Simple triangle via path
                 val path = androidx.compose.ui.graphics.Path().apply {
                     moveTo(entity.x, entity.y - entity.radius)
                     lineTo(entity.x - entity.radius, entity.y + entity.radius)
@@ -215,6 +247,41 @@ private fun DrawScope.drawEntities(state: GameState) {
     }
 }
 
+/**
+ * Draws the virtual joystick base + knob.
+ */
+private fun DrawScope.drawJoystick(anchor: Offset, knob: Offset) {
+    val baseRadius = 120f
+    val knobRadius = 50f
+
+    // Base circle (semi-transparent)
+    drawCircle(
+        color = Color(0xFF1A1F33).copy(alpha = 0.6f),
+        radius = baseRadius,
+        center = anchor
+    )
+    // Base outline
+    drawCircle(
+        color = Color(0xFF333A4D),
+        radius = baseRadius,
+        center = anchor,
+        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+    )
+    // Knob
+    drawCircle(
+        color = Color(0xFF00E676).copy(alpha = 0.8f),
+        radius = knobRadius,
+        center = knob
+    )
+    // Knob outline
+    drawCircle(
+        color = Color(0xFF00E676),
+        radius = knobRadius,
+        center = knob,
+        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+    )
+}
+
 // === HUD Components ===
 
 @Composable
@@ -224,6 +291,7 @@ private fun GameHUD(
     level: Int,
     secondsRemaining: Long,
     score: Long,
+    gold: Int,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -240,8 +308,8 @@ private fun GameHUD(
             // Level badge
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(24.dp))
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(22.dp))
                     .background(Color(0xFF00E676)),
                 contentAlignment = Alignment.Center
             ) {
@@ -249,7 +317,7 @@ private fun GameHUD(
                     text = "$level",
                     color = Color(0xFF0A0E1A),
                     fontWeight = FontWeight.Black,
-                    fontSize = 20.sp
+                    fontSize = 18.sp
                 )
             }
 
@@ -257,7 +325,7 @@ private fun GameHUD(
 
             // HP bar
             Column(modifier = Modifier.weight(1f)) {
-                Text("HP", color = Color(0xFFFF1744), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("HP", color = Color(0xFFFF1744), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 LinearProgressIndicator(
                     progress = { hp },
                     modifier = Modifier
@@ -271,15 +339,28 @@ private fun GameHUD(
 
             Spacer(modifier = Modifier.width(8.dp))
 
+            // Gold
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("GOLD", color = Color(0xFFFFD700), fontSize = 9.sp)
+                Text(
+                    text = "$gold",
+                    color = Color(0xFFFFD700),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
             // Timer
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("TIME", color = Color(0xFF9E9E9E), fontSize = 10.sp)
+                Text("TIME", color = Color(0xFF9E9E9E), fontSize = 9.sp)
                 val mins = secondsRemaining / 60
                 val secs = secondsRemaining % 60
                 Text(
                     text = "%d:%02d".format(mins, secs),
                     color = Color.White,
-                    fontSize = 18.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -298,15 +379,4 @@ private fun GameHUD(
             trackColor = Color(0xFF333A4D)
         )
     }
-}
-
-// === HUD Level-Up Overlay (Placeholder for next Epic) ===
-
-/**
- * Called when the HUD can't be rendered due to annotation issues.
- * TODO: Fix the Composable annotation.
- */
-@Composable
-private fun HudSpacer() {
-    Spacer(modifier = Modifier.height(1.dp))
 }
