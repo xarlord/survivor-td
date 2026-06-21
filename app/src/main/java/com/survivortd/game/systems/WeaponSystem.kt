@@ -3,6 +3,7 @@ package com.survivortd.game.systems
 import com.survivortd.game.components.EnemyComponent
 import com.survivortd.game.components.PositionComponent
 import com.survivortd.game.components.ProjectileComponent
+import com.survivortd.game.components.StatusEffectsComponent
 import com.survivortd.game.components.TagComponent
 import com.survivortd.game.config.GameBalance
 import com.survivortd.game.config.WeaponType
