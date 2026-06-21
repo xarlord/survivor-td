@@ -60,6 +60,8 @@ class ProjectileSystem(
             }
 
             // Move projectile
+            val oldX = pos.x
+            val oldY = pos.y
             pos.x += vel.x * dt
             pos.y += vel.y * dt
 
@@ -72,8 +74,10 @@ class ProjectileSystem(
                     continue
                 }
             } else {
-                // Standard projectile: check enemy collisions
-                checkProjectileCollisions(i, proj, pos)
+                // Standard projectile: check enemy collisions at midpoint
+                val midX = (oldX + pos.x) / 2f
+                val midY = (oldY + pos.y) / 2f
+                checkProjectileCollisions(i, proj, midX, midY)
             }
 
             // Remove if out of world bounds
@@ -92,7 +96,8 @@ class ProjectileSystem(
     private fun checkProjectileCollisions(
         projIndex: Int,
         proj: ProjectileComponent,
-        projPos: com.survivortd.game.components.PositionComponent
+        checkX: Float,
+        checkY: Float
     ) {
         for (j in state.enemies.indices) {
             if (j >= state.tags.size) break
@@ -104,11 +109,11 @@ class ProjectileSystem(
             if (proj.hitEntityIds.contains(j)) continue
 
             val enemyPos = state.positions[j]
-            val dx = enemyPos.x - projPos.x
-            val dy = enemyPos.y - projPos.y
+            val dx = enemyPos.x - checkX
+            val dy = enemyPos.y - checkY
             val distSq = dx * dx + dy * dy
 
-            val hitRadius = 15f + (if (projIndex < state.renders.size) state.renders[projIndex].radius else 4f)
+            val hitRadius = 20f + (if (projIndex < state.renders.size) state.renders[projIndex].radius else 4f)
             if (distSq <= hitRadius * hitRadius) {
                 // Hit!
                 dealProjectileDamage(j, proj, projIndex)
@@ -120,7 +125,7 @@ class ProjectileSystem(
 
                 // AoE explosion
                 if (proj.aoeRadius > 0f) {
-                    explodeAoE(projPos.x, projPos.y, proj.aoeRadius, proj.damage, j)
+                    explodeAoE(checkX, checkY, proj.aoeRadius, proj.damage, j)
                     // AoE projectiles die on first hit
                     state.healths[projIndex].currentHp = 0f
                     return
