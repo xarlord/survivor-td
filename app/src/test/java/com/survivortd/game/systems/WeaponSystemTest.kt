@@ -121,8 +121,9 @@ class WeaponSystemTest {
             )
             val hpBefore = state.healths[enemyId].currentHp
             weaponSys.update(0.6f)
-            // Run projectile system to move bullet into enemy
-            repeat(5) { projSys.update(0.016f) }
+            // Run projectile system enough ticks for bullet to reach enemy
+            // Bullet speed=600, distance=100, need ~0.17s → 20 ticks of 0.016f
+            repeat(20) { projSys.update(0.016f) }
             assertTrue(state.healths[enemyId].currentHp < hpBefore,
                 "Enemy HP should decrease: before=$hpBefore after=${state.healths[enemyId].currentHp}")
         }
@@ -295,7 +296,7 @@ class WeaponSystemTest {
             )
             val hpBefore = state.healths[enemyId].currentHp
             weaponSys.update(0.6f)
-            repeat(5) { projSys.update(0.016f) }
+            repeat(20) { projSys.update(0.016f) }
             val damage = hpBefore - state.healths[enemyId].currentHp
             // Base damage is 8 at level 1, with 15% Power Core boost = ~9.2
             assertTrue(damage > 8f,
