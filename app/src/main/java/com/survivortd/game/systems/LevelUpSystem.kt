@@ -150,9 +150,42 @@ class LevelUpSystem(
             rarity = Rarity.COMMON
         ))
 
-        // Pick 3-4 weighted random choices without duplicates
-        val count = if (pool.size >= 4) 4 else pool.size
-        return pickWeighted(pool, count)
+        // Smart choice generation:
+        // 1. Guarantee at least one weapon option (new or upgrade) if any exist
+        // 2. Guarantee at least one passive option if any exist
+        // 3. Always include HEAL and STAT_BOOST as fallbacks
+        // 4. Fill remaining slots with random picks
+        val weaponOptions = pool.filter {
+            it.type == UpgradeType.NEW_WEAPON || it.type == UpgradeType.UPGRADE_WEAPON
+        }
+        val passiveOptions = pool.filter {
+            it.type == UpgradeType.NEW_PASSIVE || it.type == UpgradeType.UPGRADE_PASSIVE
+        }
+        val fallbacks = pool.filter {
+            it.type == UpgradeType.HEAL || it.type == UpgradeType.STAT_BOOST
+        }
+
+        val result = mutableListOf<UpgradeChoice>()
+
+        // Pick one random weapon option
+        if (weaponOptions.isNotEmpty()) {
+            result.add(weaponOptions[Random.nextInt(weaponOptions.size)])
+        }
+        // Pick one random passive option
+        if (passiveOptions.isNotEmpty()) {
+            result.add(passiveOptions[Random.nextInt(passiveOptions.size)])
+        }
+        // Add fallbacks
+        result.addAll(fallbacks)
+
+        // If we still need more, pull from remaining pool
+        val remaining = pool.filter { it !in result }
+        while (result.size < 4 && remaining.isNotEmpty()) {
+            val idx = Random.nextInt(remaining.size)
+            result.add(remaining.removeAt(idx))
+        }
+
+        return result.take(4)
     }
 
     /**

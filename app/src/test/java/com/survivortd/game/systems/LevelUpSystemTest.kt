@@ -67,11 +67,17 @@ class LevelUpSystemTest {
         @Test
         @DisplayName("Offers weapon upgrade when weapons owned")
         fun offersWeaponUpgrade() {
+            // Add 6 weapons to fill slots, so pool only has upgrades (no new weapons)
             weaponSys.addWeapon(WeaponType.ASSAULT_RIFLE)
+            weaponSys.addWeapon(WeaponType.SPREAD_GUN)
+            weaponSys.addWeapon(WeaponType.KATANA)
+            weaponSys.addWeapon(WeaponType.LIGHTNING_ORB)
+            weaponSys.addWeapon(WeaponType.ROCKET_LAUNCHER)
+            weaponSys.addWeapon(WeaponType.FORCE_FIELD)
             state.pendingLevelUps = 1
             val choices = levelUpSys.generateChoices()
             assertTrue(choices.any { it.type == UpgradeType.UPGRADE_WEAPON },
-                "Should offer weapon upgrade when weapons owned")
+                "Should offer weapon upgrade when 6 weapons owned (no new weapon slots)")
         }
 
         @Test
