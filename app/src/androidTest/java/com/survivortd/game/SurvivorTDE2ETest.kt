@@ -5,7 +5,6 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.waitUntilAtLeastOneExists
 import org.junit.Rule
 import org.junit.Test
 
@@ -26,58 +25,41 @@ class SurvivorTDE2ETest {
 
     @Test
     fun main_menu_shows_title_and_play_button() {
-        composeRule.onNodeWithTag("title")
-            .assertIsDisplayed()
-        composeRule.onNodeWithText("PLAY")
-            .assertIsDisplayed()
+        composeRule.onNodeWithTag("title").assertIsDisplayed()
+        composeRule.onNodeWithText("PLAY").assertIsDisplayed()
     }
 
     @Test
     fun tapping_play_starts_game_screen() {
-        composeRule.onNodeWithTag("play_button")
-            .performClick()
+        composeRule.onNodeWithTag("play_button").performClick()
+        composeRule.waitForIdle()
+        Thread.sleep(2000)
 
-        // Game screen should appear
-        composeRule.waitUntilAtLeastOneExists(
-            timeoutMillis = 5000
-        ) {
-            composeRule.onAllNodesWithTag("game_screen").fetchSemanticsNodes().isNotEmpty()
-        }
-
-        composeRule.onNodeWithTag("game_screen")
-            .assertIsDisplayed()
+        // Game screen should be visible
+        composeRule.onNodeWithTag("game_screen").assertIsDisplayed()
     }
 
     @Test
     fun game_screen_remains_visible_after_5_seconds() {
         // Start the game
         composeRule.onNodeWithTag("play_button").performClick()
-
-        composeRule.waitUntilAtLeastOneExists(timeoutMillis = 5000) {
-            composeRule.onAllNodesWithTag("game_screen").fetchSemanticsNodes().isNotEmpty()
-        }
-
-        // Wait 5 seconds — game should still be running (not crashed)
+        composeRule.waitForIdle()
         Thread.sleep(5000)
 
-        composeRule.onNodeWithTag("game_screen")
-            .assertIsDisplayed()
+        // App should still be alive — game screen still displayed
+        composeRule.onNodeWithTag("game_screen").assertIsDisplayed()
     }
 
     @Test
     fun app_survives_15_seconds_of_gameplay_without_crash() {
         // Start the game
         composeRule.onNodeWithTag("play_button").performClick()
-
-        composeRule.waitUntilAtLeastOneExists(timeoutMillis = 5000) {
-            composeRule.onAllNodesWithTag("game_screen").fetchSemanticsNodes().isNotEmpty()
-        }
+        composeRule.waitForIdle()
 
         // Simulate 15 seconds of gameplay
         Thread.sleep(15000)
 
         // App should still be alive — game screen still displayed
-        composeRule.onNodeWithTag("game_screen")
-            .assertIsDisplayed()
+        composeRule.onNodeWithTag("game_screen").assertIsDisplayed()
     }
 }
