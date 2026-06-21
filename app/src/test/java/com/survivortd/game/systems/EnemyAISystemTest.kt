@@ -123,7 +123,7 @@ class EnemyAISystemTest {
                     return
                 }
             }
-            fail("Brute never entered CHARGE state")
+            fail<Unit>("Brute never entered CHARGE state")
         }
     }
 
