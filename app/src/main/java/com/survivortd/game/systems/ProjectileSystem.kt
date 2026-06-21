@@ -59,25 +59,36 @@ class ProjectileSystem(
                 }
             }
 
-            // Move projectile
-            val oldX = pos.x
-            val oldY = pos.y
-            pos.x += vel.x * dt
-            pos.y += vel.y * dt
+            // Move projectile with sub-stepped collision detection
+            // (prevents fast projectiles from tunneling through enemies)
+            val moveDist = kotlin.math.sqrt(vel.x * vel.x + vel.y * vel.y) * dt
+            val subSteps = kotlin.math.ceil(moveDist / 20f).toInt().coerceIn(1, 10)
+            val subDt = dt / subSteps
+            var hitSomething = false
+            for (step in 0 until subSteps) {
+                pos.x += vel.x * subDt
+                pos.y += vel.y * subDt
 
-            // Mine: check for nearby enemies → detonate
-            if (proj.isMine) {
-                val detonated = checkMineDetonation(i, proj, dt)
-                if (detonated) {
-                    state.healths[i].currentHp = 0f
-                    i++
-                    continue
+                // Mine: check for nearby enemies → detonate
+                if (proj.isMine) {
+                    val detonated = checkMineDetonation(i, proj, subDt)
+                    if (detonated) {
+                        state.healths[i].currentHp = 0f
+                        hitSomething = true
+                        break
+                    }
+                } else {
+                    // Standard projectile: check enemy collisions
+                    checkProjectileCollisions(i, proj, pos.x, pos.y)
+                    if (state.healths[i].isDead) {
+                        hitSomething = true
+                        break
+                    }
                 }
-            } else {
-                // Standard projectile: check enemy collisions at midpoint
-                val midX = (oldX + pos.x) / 2f
-                val midY = (oldY + pos.y) / 2f
-                checkProjectileCollisions(i, proj, midX, midY)
+            }
+            if (hitSomething) {
+                i++
+                continue
             }
 
             // Remove if out of world bounds

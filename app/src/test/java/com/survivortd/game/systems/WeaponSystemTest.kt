@@ -14,12 +14,14 @@ class WeaponSystemTest {
 
     private lateinit var state: GameState
     private lateinit var weaponSys: WeaponSystem
+    private lateinit var projSys: ProjectileSystem
 
     @BeforeEach
     fun setup() {
         state = GameState()
         state.spawnPlayer()
         weaponSys = WeaponSystem(state)
+        projSys = ProjectileSystem(state)
     }
 
     @Nested
@@ -119,7 +121,10 @@ class WeaponSystemTest {
             )
             val hpBefore = state.healths[enemyId].currentHp
             weaponSys.update(0.6f)
-            assertTrue(state.healths[enemyId].currentHp < hpBefore)
+            // Run projectile system to move bullet into enemy
+            repeat(5) { projSys.update(0.016f) }
+            assertTrue(state.healths[enemyId].currentHp < hpBefore,
+                "Enemy HP should decrease: before=$hpBefore after=${state.healths[enemyId].currentHp}")
         }
 
         @Test
@@ -288,12 +293,13 @@ class WeaponSystemTest {
                 y = playerPos.y,
                 enemyType = EnemyComponent.EnemyData.ZOMBIE
             )
-            val hpWithoutPassive = state.healths[enemyId].currentHp
+            val hpBefore = state.healths[enemyId].currentHp
             weaponSys.update(0.6f)
-            val damageWithPassive = hpWithoutPassive - state.healths[enemyId].currentHp
-
-            // Compare to base damage (8 at level 1) — with 15% boost should be ~9.2
-            assertTrue(damageWithPassive > 8f, "Damage should be boosted by Power Core")
+            repeat(5) { projSys.update(0.016f) }
+            val damage = hpBefore - state.healths[enemyId].currentHp
+            // Base damage is 8 at level 1, with 15% Power Core boost = ~9.2
+            assertTrue(damage > 8f,
+                "Damage ($damage) should exceed base (8.0) with Power Core passive")
         }
 
         @Test

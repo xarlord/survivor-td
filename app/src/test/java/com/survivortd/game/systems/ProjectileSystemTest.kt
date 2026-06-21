@@ -46,14 +46,16 @@ class ProjectileSystemTest {
     @DisplayName("Projectile damages enemy on collision")
     fun projectileDamagesEnemy() {
         val projId = state.spawnProjectile(x = 0f, y = 0f)
-        state.velocities[projId].x = 500f
+        state.velocities[projId].x = 100f
         state.projectiles[projId].damage = 15f
         state.projectiles[projId].lifetime = 5f
 
-        val enemyId = state.spawnEnemy(x = 50f, y = 0f, enemyType = EnemyComponent.EnemyData.ZOMBIE)
+        val enemyId = state.spawnEnemy(x = 30f, y = 0f, enemyType = EnemyComponent.EnemyData.ZOMBIE)
         val hpBefore = state.healths[enemyId].currentHp
 
-        projSys.update(0.1f)  // Projectile moves 50px → hits enemy
+        // Projectile at x=0 moves 100px/sec, enemy at x=30, dt=0.5 → proj reaches x=50
+        // Enemy at x=30 is within hitRadius (24) of projectile at x=50? 50-30=20 ≤ 24 → HIT
+        projSys.update(0.5f)
 
         assertTrue(state.healths[enemyId].currentHp < hpBefore,
             "Enemy should take damage: before=$hpBefore, after=${state.healths[enemyId].currentHp}")
