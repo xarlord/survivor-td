@@ -124,6 +124,8 @@ class EnemyAISystem(
                 if (dist < 200f && enemy.aiTimer <= 0f) {
                     enemy.aiState = AiState.CHARGE
                     enemy.aiTimer = 0.6f  // Telegraph duration (0.6s)
+                    vel.x = 0f  // Immediately stop on transition
+                    vel.y = 0f
                 }
             }
             AiState.CHARGE -> {

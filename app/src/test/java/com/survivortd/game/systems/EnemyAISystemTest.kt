@@ -112,23 +112,18 @@ class EnemyAISystemTest {
                 x = playerPos.x + 100f, y = playerPos.y,
                 enemyType = EnemyComponent.EnemyData.BRUTE
             )
-            // Advance until CHARGE starts, then check velocity on the NEXT tick
-            var foundCharge = false
+            // Advance until CHARGE starts
             for (i in 0 until 200) {
                 ai.update(0.016f)
-                if (state.enemies[bruteId].aiState == AiState.CHARGE && !foundCharge) {
-                    foundCharge = true
-                    // First tick of CHARGE: aiTimer starts at 0.6, so still in telegraph (> 0.3f)
-                    if (state.enemies[bruteId].aiTimer > 0.3f) {
-                        val vel = state.velocities[bruteId]
-                        assertEquals(0f, vel.x, 1f, "Brute should stop during telegraph phase")
-                        assertEquals(0f, vel.y, 1f, "Brute should stop during telegraph phase")
-                        return
-                    }
+                if (state.enemies[bruteId].aiState == AiState.CHARGE) {
+                    val vel = state.velocities[bruteId]
+                    // During CHARGE (telegraph), velocity should be zero
+                    assertTrue(kotlin.math.abs(vel.x) < 5f && kotlin.math.abs(vel.y) < 5f,
+                        "Brute should be stopped during CHARGE telegraph, got vel=(${vel.x}, ${vel.y})")
+                    return
                 }
             }
-            // If we never caught the telegraph moment, just verify CHARGE state was reached
-            assertTrue(foundCharge, "Brute should have entered CHARGE state")
+            fail("Brute never entered CHARGE state")
         }
     }
 
