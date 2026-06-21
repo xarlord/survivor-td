@@ -96,9 +96,18 @@ class MovementSystem(
 
             val pos = state.positions[i]
             val vel = state.velocities[i]
+            val enemy = state.enemies[i]
 
-            pos.x += vel.x * dt
-            pos.y += vel.y * dt
+            // Apply slow effect from frost towers
+            val speedMult = if (enemy.slowTimer > 0f) {
+                enemy.slowTimer -= dt
+                (1f - enemy.slowMagnitude).coerceAtLeast(0.1f)
+            } else {
+                1f
+            }
+
+            pos.x += vel.x * speedMult * dt
+            pos.y += vel.y * speedMult * dt
 
             // Clamp to world bounds (enemies can't leave the arena)
             pos.x = pos.x.coerceIn(-100f, GameConfig.WORLD_WIDTH + 100f)

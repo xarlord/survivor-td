@@ -79,7 +79,9 @@ data class EnemyComponent(
     var targetId: Int = -1,           // For healer/shielder targeting
     var spawnX: Float = 0f,          // Remember spawn position for spitter kiting
     var spawnY: Float = 0f,
-    var zigzagPhase: Float = 0f      // For runner/flyer erratic movement
+    var zigzagPhase: Float = 0f,     // For runner/flyer erratic movement
+    var slowTimer: Float = 0f,       // Active slow effect duration
+    var slowMagnitude: Float = 0f    // Slow amount (0=none, 0.4=40% slow)
 ) {
     enum class EnemyData { ZOMBIE, RUNNER, BRUTE, SPITTER, BOMBER, HEALER, SHIELDER, FLYER, ELITE, BOSS }
     enum class AiState { CHASE, ATTACK, FLEE, SUMMON, SPECIAL, CHARGE, KITE, SUPPORT }
@@ -124,6 +126,7 @@ data class ProjectileComponent(
 data class PickupComponent(
     var xpValue: Int = 0,
     var goldValue: Int = 0,
+    var scrapValue: Int = 0,
     var healAmount: Float = 0f,
     var isMagnetized: Boolean = false,
     var lifetime: Float = 30f
@@ -137,6 +140,7 @@ data class PlayerComponent(
     var currentXp: Int = 0,
     var xpToNext: Int = 8,
     var gold: Int = 0,
+    var scrap: Int = 0,
     var pickupRange: Float = 60f,
     var damageMult: Float = 1f,
     var attackSpeedMult: Float = 1f,

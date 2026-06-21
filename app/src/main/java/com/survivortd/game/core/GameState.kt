@@ -179,6 +179,7 @@ class GameState {
         y: Float,
         xpValue: Int = 0,
         goldValue: Int = 0,
+        scrapValue: Int = 0,
         healAmount: Float = 0f,
         color: Int = 0xFF42A5F5.toInt(),
         radius: Float = 5f
@@ -198,6 +199,7 @@ class GameState {
         pickups.add(PickupComponent(
             xpValue = xpValue,
             goldValue = goldValue,
+            scrapValue = scrapValue,
             healAmount = healAmount,
             lifetime = GameConfig.GEM_LIFETIME
         ))

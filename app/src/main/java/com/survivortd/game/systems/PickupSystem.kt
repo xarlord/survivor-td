@@ -84,11 +84,26 @@ class PickupSystem(
             GameConfig.GOLD_CHEST_MIN + kotlin.random.Random.nextInt(GameConfig.GOLD_CHEST_MAX - GameConfig.GOLD_CHEST_MIN)
         else GameConfig.GOLD_PER_KILL
 
+        // Scrap drops for tower placement
+        val scrapValue = when (enemyType) {
+            EnemyComponent.EnemyData.ZOMBIE,
+            EnemyComponent.EnemyData.RUNNER,
+            EnemyComponent.EnemyData.FLYER -> 2
+            EnemyComponent.EnemyData.BRUTE,
+            EnemyComponent.EnemyData.SHIELDER,
+            EnemyComponent.EnemyData.SPITTER -> 5
+            EnemyComponent.EnemyData.BOMBER,
+            EnemyComponent.EnemyData.HEALER -> 3
+            EnemyComponent.EnemyData.ELITE -> 10
+            EnemyComponent.EnemyData.BOSS -> 50
+        }
+
         state.spawnPickup(
             x = x + scatterX,
             y = y + scatterY,
             xpValue = xpValue,
             goldValue = goldValue,
+            scrapValue = scrapValue,
             color = gemColor,
             radius = gemRadius
         )
@@ -155,6 +170,10 @@ class PickupSystem(
                     player.gold += pickup.goldValue
                     state.goldCollected += pickup.goldValue
                 }
+                // Apply scrap
+                if (pickup.scrapValue > 0) {
+                    player.scrap += pickup.scrapValue
+                }
                 // Apply heal
                 if (pickup.healAmount > 0f && state.playerIndex < state.healths.size) {
                     val health = state.healths[state.playerIndex]
@@ -163,6 +182,7 @@ class PickupSystem(
                 // Mark for removal
                 pickup.xpValue = 0
                 pickup.goldValue = 0
+                pickup.scrapValue = 0
                 pickup.healAmount = 0f
             }
         }
