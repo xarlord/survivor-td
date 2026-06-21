@@ -1,8 +1,5 @@
 # Add project specific ProGuard rules here.
 
-# Fleks ECS
--keep class com.github.quillraven.fleks.** { *; }
-
 # Kotlinx Serialization
 -keepattributes *Annotation*, InnerClasses
 -dontnote kotlinx.serialization.AnnotationsKt

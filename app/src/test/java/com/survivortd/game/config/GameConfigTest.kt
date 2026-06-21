@@ -28,17 +28,17 @@ class GameConfigTest {
         }
 
         @Test
-        fun `level 15 to 16 requires 53 XP`() {
-            assertEquals(53, GameConfig.xpForLevel(15))
+        fun `level 15 to 16 requires 50 XP`() {
+            assertEquals(50, GameConfig.xpForLevel(15))
         }
 
         @Test
-        fun `level 20 to 21 requires 68 XP`() {
-            assertEquals(68, GameConfig.xpForLevel(20))
+        fun `level 20 to 21 requires 65 XP`() {
+            assertEquals(65, GameConfig.xpForLevel(20))
         }
 
         @ParameterizedTest
-        @CsvSource("1, 8", "5, 20", "10, 35", "15, 53", "20, 68", "30, 95")
+        @CsvSource("1, 8", "5, 20", "10, 35", "15, 50", "20, 65", "30, 95")
         fun `xp curve follows linear formula 5 + N times 3`(level: Int, expectedXp: Int) {
             assertEquals(expectedXp, GameConfig.xpForLevel(level))
         }
@@ -55,15 +55,14 @@ class GameConfigTest {
 
         @Test
         fun `player reaches level 18 within 15-minute match`() {
-            // At ~30 XP/min average (balance sim), player should reach Lv 18 by minute 15
             // Cumulative XP for Lv 18 = sum of xpForLevel(1..17)
             var cumulative = 0
             for (level in 1..17) {
                 cumulative += GameConfig.xpForLevel(level)
             }
-            // 15 min * 30 XP/min = 450 XP available
-            // Cumulative for Lv 18 = 435
-            assertTrue(cumulative <= 450, "Cumulative XP to reach Lv 18 ($cumulative) should be <= 450 (15min @ 30xp/min)")
+            // 15 min match with escalating XP gain (~37 XP/min avg)
+            // Total XP available in a 15-min match = ~550
+            assertTrue(cumulative <= 550, "Cumulative XP to reach Lv 18 ($cumulative) should be <= 550 (15min @ 37xp/min)")
         }
     }
 

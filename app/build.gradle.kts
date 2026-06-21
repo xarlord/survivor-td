@@ -3,8 +3,6 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
-    id("io.github.quillraven.fleks")
-    id("com.google.devtools.ksp")
 }
 
 android {
@@ -79,9 +77,6 @@ android {
 
 dependencies {
     // === GAME ENGINE ===
-    
-    // Fleks ECS
-    implementation("io.github.quillraven.fleks:fleks:1.5.0")
 
     // dyn4j — Pure Java 2D Physics (v5.0.2 = first Android-compatible version)
     implementation("org.dyn4j:dyn4j:5.0.2")
