@@ -179,7 +179,7 @@ class LevelUpSystem(
         result.addAll(fallbacks)
 
         // If we still need more, pull from remaining pool
-        val remaining = pool.filter { it !in result }
+        val remaining = pool.filter { it !in result }.toMutableList()
         while (result.size < 4 && remaining.isNotEmpty()) {
             val idx = Random.nextInt(remaining.size)
             result.add(remaining.removeAt(idx))
