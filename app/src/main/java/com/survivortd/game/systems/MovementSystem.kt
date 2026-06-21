@@ -1,5 +1,6 @@
 package com.survivortd.game.systems
 
+import com.survivortd.game.components.EnemyComponent
 import com.survivortd.game.config.GameConfig
 import com.survivortd.game.core.GameState
 import com.survivortd.game.core.InputType
@@ -88,8 +89,8 @@ class MovementSystem(
 
         for (i in state.enemies.indices) {
             if (i >= state.positions.size) break
+            if (i >= state.velocities.size) break
             val pos = state.positions[i]
-            val vel = state.velocities.getOrElse(i) { continue }
             val enemy = state.enemies[i]
 
             // Direction towards player
@@ -99,23 +100,20 @@ class MovementSystem(
 
             if (dist > 1f) {
                 val speed = when (enemy.type) {
-                    EnemyData.ZOMBIE -> 80f
-                    EnemyData.RUNNER -> 160f
-                    EnemyData.BRUTE -> 60f
-                    EnemyData.SPIDER -> 50f
-                    EnemyData.BOMBER -> 100f
-                    EnemyData.HEALER -> 70f
-                    EnemyData.SHIELDER -> 80f
-                    EnemyData.FLYER -> 120f
-                    EnemyData.ELITE -> 96f
-                    EnemyData.BOSS -> 50f
+                    EnemyComponent.EnemyData.ZOMBIE -> 80f
+                    EnemyComponent.EnemyData.RUNNER -> 160f
+                    EnemyComponent.EnemyData.BRUTE -> 60f
+                    EnemyComponent.EnemyData.SPITTER -> 50f
+                    EnemyComponent.EnemyData.BOMBER -> 100f
+                    EnemyComponent.EnemyData.HEALER -> 70f
+                    EnemyComponent.EnemyData.SHIELDER -> 80f
+                    EnemyComponent.EnemyData.FLYER -> 120f
+                    EnemyComponent.EnemyData.ELITE -> 96f
+                    EnemyComponent.EnemyData.BOSS -> 50f
                 }
                 pos.x += (dx / dist) * speed * dt
                 pos.y += (dy / dist) * speed * dt
             }
         }
     }
-
-    // Re-import the enum for convenience
-    private typealias EnemyData = com.survivortd.game.components.EnemyComponent.EnemyData
 }

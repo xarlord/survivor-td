@@ -103,7 +103,7 @@ class SpawnDirector(
                 r < 0.55f -> EnemyComponent.EnemyData.ZOMBIE
                 r < 0.75f -> EnemyComponent.EnemyData.RUNNER
                 r < 0.88f -> EnemyComponent.EnemyData.BRUTE
-                else -> EnemyComponent.EnemyData.SPIDER
+                else -> EnemyComponent.EnemyData.SPITTER
             }
             minute < 10 -> when {
                 r < 0.40f -> EnemyComponent.EnemyData.ZOMBIE

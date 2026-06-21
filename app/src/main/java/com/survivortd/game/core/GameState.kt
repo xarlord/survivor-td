@@ -100,10 +100,11 @@ class GameState {
         ))
         healths.add(HealthComponent(
             maxHp = GameConfig.PLAYER_BASE_HP,
-            currentHp = GameConfig.PLAYER_BASE_HP,
-            regen = GameConfig.PLAYER_BASE_REGEN
+            currentHp = GameConfig.PLAYER_BASE_HP
         ))
-        players.add(PlayerComponent())
+        players.add(PlayerComponent().apply {
+            regen = GameConfig.PLAYER_BASE_REGEN
+        })
         tags.add(TagComponent(TagComponent.EntityTag.PLAYER))
         playerIndex = id
         return id
@@ -125,7 +126,7 @@ class GameState {
                 EnemyComponent.EnemyData.ZOMBIE -> 0xFF888888.toInt()
                 EnemyComponent.EnemyData.RUNNER -> 0xFFFF1744.toInt()
                 EnemyComponent.EnemyData.BRUTE -> 0xFF4CAF50.toInt()
-                EnemyComponent.EnemyData.SPIDER -> 0xFF6A1B9A.toInt()
+                EnemyComponent.EnemyData.SPITTER -> 0xFF6A1B9A.toInt()
                 EnemyComponent.EnemyData.BOMBER -> 0xFFFF6F00.toInt()
                 EnemyComponent.EnemyData.HEALER -> 0xFF66BB6A.toInt()
                 EnemyComponent.EnemyData.SHIELDER -> 0xFF2196F3.toInt()
@@ -139,7 +140,7 @@ class GameState {
             EnemyComponent.EnemyData.ZOMBIE -> 20f
             EnemyComponent.EnemyData.RUNNER -> 15f
             EnemyComponent.EnemyData.BRUTE -> 100f
-            EnemyComponent.EnemyData.SPIDER -> 40f
+            EnemyComponent.EnemyData.SPITTER -> 40f
             EnemyComponent.EnemyData.BOMBER -> 30f
             EnemyComponent.EnemyData.HEALER -> 50f
             EnemyComponent.EnemyData.SHIELDER -> 60f
