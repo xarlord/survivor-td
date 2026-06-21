@@ -105,6 +105,10 @@ class GameState {
         players.add(PlayerComponent().apply {
             regen = GameConfig.PLAYER_BASE_REGEN
         })
+        enemies.add(EnemyComponent())  // Placeholder — keeps arrays aligned
+        projectiles.add(ProjectileComponent())  // Placeholder
+        pickups.add(PickupComponent())  // Placeholder
+        towers.add(TowerComponent())  // Placeholder
         tags.add(TagComponent(TagComponent.EntityTag.PLAYER))
         playerIndex = id
         return id
@@ -152,7 +156,11 @@ class GameState {
             maxHp = baseHp * hpScale,
             currentHp = baseHp * hpScale
         ))
+        players.add(PlayerComponent())  // Placeholder
         enemies.add(EnemyComponent(type = enemyType))
+        projectiles.add(ProjectileComponent())  // Placeholder
+        pickups.add(PickupComponent())  // Placeholder
+        towers.add(TowerComponent())  // Placeholder
         tags.add(TagComponent(TagComponent.EntityTag.ENEMY))
         return id
     }

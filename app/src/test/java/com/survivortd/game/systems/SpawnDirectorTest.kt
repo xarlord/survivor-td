@@ -74,9 +74,9 @@ class SpawnDirectorTest {
     @Test
     @DisplayName("Boss spawns at minute 5")
     fun bossSpawnAt5Min() {
-        // Set elapsed to just before 5 minutes
-        state.elapsedSeconds = 299.5f
-        director.update(0.6f)  // Crosses the 300s mark
+        // Set elapsed to exactly 5 minutes
+        state.elapsedSeconds = 300f
+        director.update(0.016f)  // Single tick at 5 min mark
         val bossCount = state.enemies.count { it.type == EnemyComponent.EnemyData.BOSS }
         assertEquals(1, bossCount, "Boss should spawn at minute 5")
     }
