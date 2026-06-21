@@ -101,10 +101,11 @@ class TowerSystemTest {
         @DisplayName("Upgrade costs scrap")
         fun upgradeCostsScrap() {
             state.players[state.playerIndex].scrap = 99999
-            towerSys.placeTower(TowerType.GUN_TURRET, 200f, 200f)
+            towerSys.placeTower(TowerType.GUN_TURRET, 200f, 200f) // cost 50
+            val scrapAfterPlace = state.players[state.playerIndex].scrap
             // Level 2 costs 2x base = 100
             towerSys.upgradeTower(0)
-            assertEquals(99999 - 100, state.players[state.playerIndex].scrap)
+            assertEquals(scrapAfterPlace - 100, state.players[state.playerIndex].scrap)
         }
     }
 
