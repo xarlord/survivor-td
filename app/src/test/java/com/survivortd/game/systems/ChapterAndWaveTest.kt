@@ -90,13 +90,15 @@ class ChapterAndWaveTest {
         @Test
         @DisplayName("Spawn rate increases over time")
         fun spawnRateIncreases() {
-            // Early game: ~1 spawn per 1.5s
-            // Simulate 10 seconds
+            // Early game (minute 0): ~1 spawn per 1.5s
             val earlySpawns = countSpawns(10f)
-            // Advance to mid-game (5 min)
-            state.elapsedSeconds = 300f
+
+            // Advance to mid-game (3 min — before boss time)
+            state.elapsedSeconds = 180f
+            waveSys = WaveSystem(state, ChapterConfig.WASTELAND) // Fresh wave system
             val midSpawns = countSpawns(10f)
-            assertTrue(midSpawns >= earlySpawns,
+
+            assertTrue(midSpawns > earlySpawns,
                 "Spawn rate should increase over time: early=$earlySpawns, mid=$midSpawns")
         }
 
