@@ -65,7 +65,7 @@ class CombatSystemTest {
     fun invincibilityWearsOff() {
         val pid = state.playerIndex
         val playerPos = state.positions[pid]
-        state.spawnEnemy(
+        val enemyId = state.spawnEnemy(
             x = playerPos.x + 10f,
             y = playerPos.y,
             enemyType = EnemyComponent.EnemyData.ZOMBIE
@@ -73,6 +73,10 @@ class CombatSystemTest {
         combat.update(0.016f)  // Hit
         val hpAfterFirstHit = state.healths[pid].currentHp
         assertTrue(state.healths[pid].invincible)
+
+        // Move enemy away so it doesn't re-hit
+        state.positions[enemyId].x = playerPos.x + 9999f
+        state.positions[enemyId].y = playerPos.y + 9999f
 
         // Wait for invincibility to expire
         combat.update(0.6f)

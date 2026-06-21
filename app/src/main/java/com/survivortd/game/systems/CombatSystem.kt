@@ -65,6 +65,10 @@ class CombatSystem(
             state.renders[state.playerIndex].radius else GameConfig.PLAYER_HITBOX_RADIUS
 
         for (i in state.enemies.indices) {
+            // Skip player entity and non-enemy placeholders
+            if (i == state.playerIndex) continue
+            if (i >= state.tags.size) break
+            if (state.tags[i].tag != com.survivortd.game.components.TagComponent.EntityTag.ENEMY) continue
             if (i >= state.positions.size) break
             val enemyPos = state.positions[i]
             val enemyRadius = if (i < state.renders.size) state.renders[i].radius else 12f

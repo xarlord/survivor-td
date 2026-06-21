@@ -79,11 +79,11 @@ class PickupSystemTest {
     fun playerCollectsXpGem() {
         val pid = state.playerIndex
         val playerPos = state.positions[pid]
-        // Place gem right on the player
+        // Place gem right on the player, small XP so it doesn't trigger level-up
         state.spawnPickup(
             x = playerPos.x,
             y = playerPos.y,
-            xpValue = 8
+            xpValue = 3
         )
         val xpBefore = state.players[pid].currentXp
         pickupSystem.update(0.016f)
