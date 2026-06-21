@@ -1,0 +1,25 @@
+# Project Enforcement Configuration
+project_name: "Survivor TD"
+main_branch: master
+github:
+  owner: xarlord
+  repo: survivor-td
+branch_protection:
+  enabled: true
+  enforce_admins: true
+  required_checks:
+    - build-and-test
+    - lint
+    - "🚦 TDD"
+    # E2E is advisory (continue-on-error) until emulator is set up
+workflow:
+  issue_first: true
+  pr_only: true
+  tdd: true
+  coverage_gate: 60
+visual_review:
+  enabled: true
+  tool: agy
+retrospective:
+  enabled: true
+  schedule: "0 8 * * *"

@@ -1,0 +1,84 @@
+name: CI
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v3
+      - name: Build debug APK
+        run: ./gradlew assembleDevDebug
+      - name: Run unit tests
+        run: ./gradlew testDevDebugUnitTest
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v3
+      - name: Android Lint
+        run: ./gradlew lintDevDebug
+
+  tdd-enforcement:
+    runs-on: ubuntu-latest
+    name: "🚦 TDD"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify tests exist for changed Kotlin files
+        run: |
+          BASE_BRANCH="${{ github.base_ref || 'master' }}"
+          # If no base_ref (push event), compare against HEAD~1
+          if [ -z "$BASE_BRANCH" ]; then
+            BASE_BRANCH="HEAD~1"
+          fi
+          CHANGED=$(git diff --name-only "$BASE_BRANCH...HEAD" 2>/dev/null | grep -E '\.kt$' || true)
+          if [ -z "$CHANGED" ]; then
+            echo "✅ No Kotlin files changed"
+            exit 0
+          fi
+          FAIL=0
+          for FILE in $CHANGED; do
+            # Skip MainActivity and UI files (no logic to test)
+            BASE=$(basename "$FILE" .kt)
+            # Look for matching test file
+            if ! find . -name "${BASE}Test.kt" -o -name "${BASE}Should.kt" 2>/dev/null | grep -q .; then
+              echo "⚠️  No test file found for: $FILE"
+              FAIL=1
+            fi
+          done
+          if [ $FAIL -eq 1 ]; then
+            echo ""
+            echo "❌ TDD enforcement failed: Some changed Kotlin files lack test files."
+            echo "   Create matching *Test.kt files before merging."
+            exit 1
+          fi
+          echo "✅ All changed Kotlin files have matching tests"
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    name: "🧪 E2E"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v3
+      - name: Run connected Android tests
+        run: ./gradlew connectedDevDebugAndroidTest
+    continue-on-error: true  # E2E requires emulator — advisory only for now
