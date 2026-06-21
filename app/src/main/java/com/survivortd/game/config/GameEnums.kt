@@ -73,19 +73,44 @@ enum class EnemyType(
 @Serializable
 enum class TowerType(
     val displayName: String,
-    val cost: Int,
+    val baseCost: Int,
     val baseDamage: Float,
     val baseRange: Float,
     val baseFireRate: Float,
+    val isAoE: Boolean = false,
+    val isDoT: Boolean = false,
     val special: String
 ) {
-    GUN_TURRET("Gun Turret", 50, 15f, 150f, 1.0f, "Single-target DPS"),
-    CANNON("Cannon", 100, 40f, 120f, 0.5f, "AoE splash"),
-    FROST_TOWER("Frost Tower", 75, 5f, 130f, 0.8f, "Slows 40% for 2s"),
-    TESLA_COIL("Tesla Coil", 120, 25f, 110f, 0.7f, "Chain lightning x3"),
-    POISON_TOWER("Poison Tower", 80, 3f, 140f, 1.0f, "Poison cloud, ignores armor"),
-    ROCKET_POD("Rocket Pod", 150, 60f, 200f, 0.3f, "Long range, AoE");
+    GUN_TURRET("Gun Turret", 50, 15f, 150f, 1.0f, special = "Single-target DPS"),
+    CANNON("Cannon", 100, 40f, 120f, 0.5f, isAoE = true, special = "AoE splash"),
+    FROST_TOWER("Frost Tower", 75, 5f, 130f, 0.8f, special = "Slows 40% for 2s"),
+    TESLA_COIL("Tesla Coil", 120, 25f, 110f, 0.7f, special = "Chain lightning x3"),
+    POISON_TOWER("Poison Tower", 80, 3f, 140f, 1.0f, isDoT = true, special = "Poison cloud, ignores armor"),
+    ROCKET_POD("Rocket Pod", 150, 60f, 200f, 0.3f, isAoE = true, special = "Long range, AoE");
+
+    /** Upgrade cost for the given target level (2x base for L2, 3x base for L3) */
+    fun upgradeCost(level: Int): Int = baseCost * level
+
+    /** Stats at the given level (1-3). L2: +50% dmg, +20% range. L3: +100% dmg, +30% range */
+    fun statsForLevel(level: Int): TowerLevelStats {
+        val l = level.coerceIn(1, 3)
+        val damageMult = 1f + 0.5f * (l - 1)
+        val rangeMult = 1f + 0.2f * (l - 1)
+        return TowerLevelStats(
+            damage = baseDamage * damageMult,
+            range = baseRange * rangeMult,
+            fireRate = baseFireRate,
+            aoeRadius = if (isAoE) baseDamage * 0.8f * damageMult else 0f
+        )
+    }
 }
+
+data class TowerLevelStats(
+    val damage: Float,
+    val range: Float,
+    val fireRate: Float,
+    val aoeRadius: Float = 0f
+)
 
 /**
  * Status effects applicable to enemies.
