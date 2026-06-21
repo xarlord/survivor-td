@@ -21,6 +21,7 @@ class GameState {
     val projectiles = mutableListOf<ProjectileComponent>()
     val pickups = mutableListOf<PickupComponent>()
     val towers = mutableListOf<TowerComponent>()
+    val statusEffects = mutableListOf<StatusEffectsComponent>()
     val tags = mutableListOf<TagComponent>()
 
     // === NEXT ENTITY ID ===
@@ -112,6 +113,7 @@ class GameState {
         projectiles.add(ProjectileComponent())  // Placeholder
         pickups.add(PickupComponent())  // Placeholder
         towers.add(TowerComponent())  // Placeholder
+        statusEffects.add(StatusEffectsComponent())
         tags.add(TagComponent(TagComponent.EntityTag.PLAYER))
         playerIndex = id
         return id
@@ -164,6 +166,7 @@ class GameState {
         projectiles.add(ProjectileComponent())  // Placeholder
         pickups.add(PickupComponent())  // Placeholder
         towers.add(TowerComponent())  // Placeholder
+        statusEffects.add(StatusEffectsComponent())
         tags.add(TagComponent(TagComponent.EntityTag.ENEMY))
         return id
     }
@@ -199,7 +202,39 @@ class GameState {
             lifetime = GameConfig.GEM_LIFETIME
         ))
         towers.add(TowerComponent())    // Placeholder
+        statusEffects.add(StatusEffectsComponent())
         tags.add(TagComponent(TagComponent.EntityTag.PICKUP))
+        return id
+    }
+
+    /**
+     * Spawn a projectile entity at the given position.
+     * Velocity, damage, etc. are set by the caller after spawning.
+     */
+    fun spawnProjectile(
+        x: Float,
+        y: Float
+    ): Int {
+        val id = nextEntityId()
+        positions.add(PositionComponent(x = x, y = y))
+        velocities.add(VelocityComponent())
+        renders.add(RenderComponent(
+            radius = 4f,
+            color = 0xFF66BB6A.toInt(),
+            shape = RenderComponent.RenderShape.CIRCLE
+        ))
+        healths.add(HealthComponent())  // Placeholder
+        players.add(PlayerComponent())  // Placeholder
+        enemies.add(EnemyComponent())   // Placeholder
+        projectiles.add(ProjectileComponent(
+            damage = 10f,
+            pierceCount = 0,
+            lifetime = 2f
+        ))
+        pickups.add(PickupComponent())  // Placeholder
+        towers.add(TowerComponent())    // Placeholder
+        statusEffects.add(StatusEffectsComponent())
+        tags.add(TagComponent(TagComponent.EntityTag.PROJECTILE))
         return id
     }
 
@@ -219,6 +254,7 @@ class GameState {
                 if (i < projectiles.size) projectiles.removeAt(i)
                 if (i < pickups.size) pickups.removeAt(i)
                 if (i < towers.size) towers.removeAt(i)
+                if (i < statusEffects.size) statusEffects.removeAt(i)
                 if (i < tags.size) tags.removeAt(i)
             } else {
                 i++

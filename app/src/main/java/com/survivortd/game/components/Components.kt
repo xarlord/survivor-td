@@ -111,7 +111,11 @@ data class ProjectileComponent(
     var onHitEffect: StatusEffectType? = null,
     var onHitEffectDuration: Float = 0f,
     var onHitEffectMagnitude: Float = 0f,
-    var hitEntityIds: MutableSet<Int> = mutableSetOf()
+    var hitEntityIds: MutableSet<Int> = mutableSetOf(),
+    var aoeRadius: Float = 0f,
+    var isBoomerang: Boolean = false,
+    var isMine: Boolean = false,
+    var ownerWeapon: com.survivortd.game.config.WeaponType = com.survivortd.game.config.WeaponType.ASSAULT_RIFLE
 )
 
 /**
