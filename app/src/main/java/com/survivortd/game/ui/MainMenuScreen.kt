@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
 
 /**
  * Main menu screen. Entry point for the game.
@@ -26,11 +27,14 @@ import androidx.compose.ui.unit.sp
  * TODO: Add chapter select, hero select, upgrades, settings navigation.
  */
 @Composable
-fun MainMenuScreen() {
+fun MainMenuScreen(
+    onPlayClick: () -> Unit = {}
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0A0E1A)),
+            .background(Color(0xFF0A0E1A))
+            .testTag("main_menu"),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -42,7 +46,8 @@ fun MainMenuScreen() {
                 text = "SURVIVOR TD",
                 fontSize = 42.sp,
                 fontWeight = FontWeight.Black,
-                color = Color(0xFF00E676)
+                color = Color(0xFF00E676),
+                modifier = Modifier.testTag("title")
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -53,13 +58,15 @@ fun MainMenuScreen() {
             Spacer(modifier = Modifier.height(48.dp))
 
             Button(
-                onClick = { /* TODO: Navigate to game screen */ },
+                onClick = onPlayClick,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF00E676),
                     contentColor = Color(0xFF0A0E1A)
                 ),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.height(56.dp)
+                modifier = Modifier
+                    .height(56.dp)
+                    .testTag("play_button")
             ) {
                 Text(
                     text = "PLAY",

@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +60,14 @@ import kotlinx.coroutines.launch
  * CRITICAL: Game state is read inside drawBehind lambdas, NOT as Compose
  * State objects. This prevents recomposition cascades that destroy FPS.
  */
+@Composable
+fun GameScreen(
+    onExit: () -> Unit
+) {
+    val gameState = remember { GameState() }
+    GameScreen(gameState = gameState, onGameOver = onExit, onExit = onExit)
+}
+
 @Composable
 fun GameScreen(
     gameState: GameState,
@@ -120,7 +129,7 @@ fun GameScreen(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize().testTag("game_screen")) {
         // === LAYER 1: Game Canvas + Touch Input ===
         GameCanvasView(
             gameState = gameState,
