@@ -38,6 +38,9 @@ class GameState {
     var isPaused: Boolean = false
     var isVictory: Boolean = false
 
+    // === LEVEL UP QUEUE ===
+    var pendingLevelUps: Int = 0
+
     // === PLAYER INDEX (quick lookup) ===
     var playerIndex: Int = -1
 
@@ -166,6 +169,41 @@ class GameState {
     }
 
     /**
+     * Spawn a pickup (XP gem, gold, health) at the given position.
+     */
+    fun spawnPickup(
+        x: Float,
+        y: Float,
+        xpValue: Int = 0,
+        goldValue: Int = 0,
+        healAmount: Float = 0f,
+        color: Int = 0xFF42A5F5.toInt(),
+        radius: Float = 5f
+    ): Int {
+        val id = nextEntityId()
+        positions.add(PositionComponent(x = x, y = y))
+        velocities.add(VelocityComponent())
+        renders.add(RenderComponent(
+            radius = radius,
+            color = color,
+            shape = RenderComponent.RenderShape.DIAMOND
+        ))
+        healths.add(HealthComponent())  // Placeholder
+        players.add(PlayerComponent())  // Placeholder
+        enemies.add(EnemyComponent())   // Placeholder
+        projectiles.add(ProjectileComponent())  // Placeholder
+        pickups.add(PickupComponent(
+            xpValue = xpValue,
+            goldValue = goldValue,
+            healAmount = healAmount,
+            lifetime = GameConfig.GEM_LIFETIME
+        ))
+        towers.add(TowerComponent())    // Placeholder
+        tags.add(TagComponent(TagComponent.EntityTag.PICKUP))
+        return id
+    }
+
+    /**
      * Remove all entities marked as dead.
      */
     fun cleanupDeadEntities() {
@@ -211,6 +249,7 @@ class GameState {
         isGameOver = false
         isPaused = false
         isVictory = false
+        pendingLevelUps = 0
         playerIndex = -1
         cameraX = 0f
         cameraY = 0f
