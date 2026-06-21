@@ -606,7 +606,7 @@ class WeaponSystem(
             existing.duration = maxOf(existing.duration, duration)
         } else {
             se.effects.add(
-                StatusEffectsComponent.ActiveStatus(
+                com.survivortd.game.components.StatusEffectsComponent.ActiveStatus(
                     type = type, duration = duration, magnitude = magnitude
                 )
             )
