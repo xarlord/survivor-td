@@ -87,4 +87,3 @@ jobs:
           api-level: 29
           arch: x86_64
           script: ./gradlew connectedDevDebugAndroidTest
-          emulator-build: 11353
