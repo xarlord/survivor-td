@@ -83,6 +83,15 @@ fun GameScreen(
     var hudScore by remember { mutableLongStateOf(0L) }
     var hudGold by remember { mutableIntStateOf(0) }
 
+    // [#23] Redraw trigger — increments every frame to force Canvas recomposition.
+    // Game entity positions are plain Kotlin objects (NOT Compose State), so the
+    // Canvas would never redraw without this. The game loop calls onRender on a
+    // background thread; we bump this on the Main dispatcher to trigger redraw.
+    // Using Choreographer for VSYNC-aligned updates (no flooding main thread).
+    var redrawTrigger by remember { mutableIntStateOf(0) }
+    val renderHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    val renderPending = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+
     // Joystick visual state — triggers redraw at ~60Hz
     var joystickActive by remember { mutableStateOf(false) }
     var joystickAnchor by remember { mutableStateOf(Offset.Zero) }
@@ -95,27 +104,52 @@ fun GameScreen(
     val levelUpSystem = remember { LevelUpSystem(gameState, weaponSystem) }
     var levelUpChoices by remember { mutableStateOf<List<UpgradeChoice>>(emptyList()) }
 
-    // Create game loop with integrated systems
+    // Create ALL game systems
     val movementSystem = remember { com.survivortd.game.systems.MovementSystem(gameState) }
     val combatSystem = remember { com.survivortd.game.systems.CombatSystem(gameState) }
     val enemyAiSystem = remember { com.survivortd.game.systems.EnemyAISystem(gameState) }
     val pickupSystem = remember { com.survivortd.game.systems.PickupSystem(gameState) }
     val projectileSystem = remember { com.survivortd.game.systems.ProjectileSystem(gameState) }
+    // [#21] WaveSystem — spawns enemies continuously. Was completely missing.
+    val waveSystem = remember { com.survivortd.game.systems.WaveSystem(gameState) }
+    // [#22] TowerSystem — manages placed towers. Was completely missing.
+    val towerSystem = remember { com.survivortd.game.systems.TowerSystem(gameState) }
+
+    // [#20] Spawn the player entity BEFORE the game loop starts.
+    // This was the #1 reason the canvas was empty — no player existed.
+    LaunchedEffect(Unit) {
+        gameState.spawnPlayer()
+    }
+
     val gameLoop = remember(gameState) {
         GameLoop(
             onUpdate = { dt ->
                 if (gameState.isPaused || gameState.isGameOver) return@GameLoop
-                // System update order matters: AI → Movement → Combat → Weapons → Projectiles → Pickups
+                // [#21] Wave system FIRST — spawns enemies for other systems to process
+                waveSystem.update(dt)
+                // System update order: AI → Movement → Combat → Towers → Weapons → Projectiles → Pickups
                 enemyAiSystem.update(dt)
                 movementSystem.update(dt)
                 combatSystem.update(dt)
+                // [#22] Tower system — auto-targets and fires at enemies
+                towerSystem.update(dt)
                 weaponSystem.update(dt)
                 projectileSystem.update(dt)
                 pickupSystem.update(dt)
                 gameState.elapsedSeconds += dt
                 gameState.cleanupDeadEntities()
             },
-            onRender = { /* Canvas redraws via drawBehind */ }
+            onRender = {
+                // [#23] Trigger Canvas redraw by bumping state on Main thread.
+                // Guard with AtomicBoolean to prevent flooding Main thread —
+                // only one render callback queued at a time.
+                if (renderPending.compareAndSet(false, true)) {
+                    renderHandler.post {
+                        renderPending.set(false)
+                        redrawTrigger = (redrawTrigger + 1) % 1_000_000
+                    }
+                }
+            }
         )
     }
 
@@ -140,6 +174,7 @@ fun GameScreen(
             onJoystickActiveChange = { joystickActive = it },
             onJoystickAnchorChange = { joystickAnchor = it },
             onJoystickKnobChange = { joystickKnob = it },
+            redrawTrigger = redrawTrigger,
             modifier = Modifier.fillMaxSize()
         )
 
@@ -215,8 +250,13 @@ private fun GameCanvasView(
     onJoystickActiveChange: (Boolean) -> Unit,
     onJoystickAnchorChange: (Offset) -> Unit,
     onJoystickKnobChange: (Offset) -> Unit,
+    redrawTrigger: Int,
     modifier: Modifier = Modifier
 ) {
+    // [#23] Read redrawTrigger so Compose knows to recompose when it changes
+    @Suppress("UNUSED_VARIABLE")
+    val trigger = redrawTrigger
+
     Canvas(
         modifier = modifier
             .fillMaxSize()
