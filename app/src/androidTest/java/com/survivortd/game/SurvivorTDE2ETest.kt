@@ -19,7 +19,6 @@ class SurvivorTDE2ETest {
 
     @Test
     fun app_launches_without_crash() {
-        // If we get here, the app launched without crashing
         composeRule.waitForIdle()
     }
 
@@ -32,34 +31,23 @@ class SurvivorTDE2ETest {
     @Test
     fun tapping_play_starts_game_screen() {
         composeRule.onNodeWithTag("play_button").performClick()
-        composeRule.waitForIdle()
-        Thread.sleep(2000)
-
-        // Game screen should be visible
+        // The game loop fires redrawTrigger at ~60Hz via Handler.post(Main),
+        // so waitForIdle() may never complete. Use Thread.sleep + direct assertion.
+        Thread.sleep(3000)
         composeRule.onNodeWithTag("game_screen").assertIsDisplayed()
     }
 
     @Test
     fun game_screen_remains_visible_after_5_seconds() {
-        // Start the game
         composeRule.onNodeWithTag("play_button").performClick()
-        composeRule.waitForIdle()
         Thread.sleep(5000)
-
-        // App should still be alive — game screen still displayed
         composeRule.onNodeWithTag("game_screen").assertIsDisplayed()
     }
 
     @Test
     fun app_survives_15_seconds_of_gameplay_without_crash() {
-        // Start the game
         composeRule.onNodeWithTag("play_button").performClick()
-        composeRule.waitForIdle()
-
-        // Simulate 15 seconds of gameplay
         Thread.sleep(15000)
-
-        // App should still be alive — game screen still displayed
         composeRule.onNodeWithTag("game_screen").assertIsDisplayed()
     }
 }

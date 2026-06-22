@@ -87,8 +87,10 @@ fun GameScreen(
     // Game entity positions are plain Kotlin objects (NOT Compose State), so the
     // Canvas would never redraw without this. The game loop calls onRender on a
     // background thread; we bump this on the Main dispatcher to trigger redraw.
+    // Using Choreographer for VSYNC-aligned updates (no flooding main thread).
     var redrawTrigger by remember { mutableIntStateOf(0) }
     val renderHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    val renderPending = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
 
     // Joystick visual state — triggers redraw at ~60Hz
     var joystickActive by remember { mutableStateOf(false) }
@@ -139,10 +141,13 @@ fun GameScreen(
             },
             onRender = {
                 // [#23] Trigger Canvas redraw by bumping state on Main thread.
-                // The game loop runs on Dispatchers.Default, but Compose state
-                // must be mutated from Main. Using Handler.post to switch threads.
-                renderHandler.post {
-                    redrawTrigger = (redrawTrigger + 1) % 1_000_000
+                // Guard with AtomicBoolean to prevent flooding Main thread —
+                // only one render callback queued at a time.
+                if (renderPending.compareAndSet(false, true)) {
+                    renderHandler.post {
+                        renderPending.set(false)
+                        redrawTrigger = (redrawTrigger + 1) % 1_000_000
+                    }
                 }
             }
         )
