@@ -119,6 +119,8 @@ fun GameScreen(
     // This was the #1 reason the canvas was empty — no player existed.
     LaunchedEffect(Unit) {
         gameState.spawnPlayer()
+        // [#26] Register with TestGameBridge for object-level E2E tests (debug only)
+        com.survivortd.game.testing.TestGameBridge.register(gameState, weaponSystem)
     }
 
     val gameLoop = remember(gameState) {
@@ -160,6 +162,8 @@ fun GameScreen(
     DisposableEffect(Unit) {
         onDispose {
             gameLoop.stop()
+            // [#26] Unregister from TestGameBridge (debug only)
+            com.survivortd.game.testing.TestGameBridge.unregister()
         }
     }
 
