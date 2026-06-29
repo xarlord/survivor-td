@@ -623,15 +623,21 @@ class WeaponSystem(
         isMine: Boolean = false, ownerWeapon: WeaponType
     ) {
         val id = state.spawnProjectile(x = x, y = y)
-        state.velocities[id].x = vx
-        state.velocities[id].y = vy
-        state.projectiles[id].damage = damage
-        state.projectiles[id].pierceCount = pierce
-        state.projectiles[id].lifetime = lifetime
-        if (aoeRadius > 0f) state.projectiles[id].aoeRadius = aoeRadius
-        state.projectiles[id].isBoomerang = isBoomerang
-        state.projectiles[id].isMine = isMine
-        state.projectiles[id].ownerWeapon = ownerWeapon
+        // [#35] spawnProjectile() returns nextEntityId(), which is NOT an array
+        // index — it's an ever-incrementing counter. After cleanupDeadEntities()
+        // removes entities, array sizes shrink and id >= size causes
+        // IndexOutOfBoundsException. The newly spawned entity is always the LAST
+        // element in the lists, so use lastIndex instead of id.
+        val idx = state.velocities.lastIndex
+        state.velocities[idx].x = vx
+        state.velocities[idx].y = vy
+        state.projectiles[idx].damage = damage
+        state.projectiles[idx].pierceCount = pierce
+        state.projectiles[idx].lifetime = lifetime
+        if (aoeRadius > 0f) state.projectiles[idx].aoeRadius = aoeRadius
+        state.projectiles[idx].isBoomerang = isBoomerang
+        state.projectiles[idx].isMine = isMine
+        state.projectiles[idx].ownerWeapon = ownerWeapon
     }
 
     // ================================================================
