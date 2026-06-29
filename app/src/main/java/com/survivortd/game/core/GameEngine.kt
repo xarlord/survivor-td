@@ -113,12 +113,20 @@ class GameEngine(
 
     /**
      * Stop the game loop and release resources.
-     * Unregisters from TestGameBridge.
+     * Unregisters from TestGameBridge ONLY if this engine is the active one.
+     *
+     * [#35] During E2E tests, multiple engines are created sequentially
+     * (one per test). If engine A's dispose() runs after engine B has already
+     * registered, it would clear B's registration, breaking B's snapshot.
+     * We guard against this by comparing the GameState reference.
      */
     fun stop() {
         gameLoop?.stop()
         gameLoop = null
-        com.survivortd.game.testing.TestGameBridge.unregister()
+        // Only unregister if WE are still the active engine
+        if (com.survivortd.game.testing.TestGameBridge.rawState() === state) {
+            com.survivortd.game.testing.TestGameBridge.unregister()
+        }
     }
 
     /**
