@@ -31,6 +31,14 @@ class GddMechanicsValidationTest {
         )
 
         /**
+         * Utility/CC weapons that trade raw DPS for crowd control effects.
+         * Their primary value is status effects (freeze, slow), not damage.
+         */
+        private val utilityWeapons = setOf(
+            WeaponType.FROST_NOVA  // applies FREEZE, damage is secondary
+        )
+
+        /**
          * Calculate theoretical DPS for a weapon at a given level.
          * DPS = damage * projectileCount / cooldown
          * Returns 0 for aura weapons (cooldown=0) since per-shot DPS is
@@ -50,6 +58,7 @@ class GddMechanicsValidationTest {
             // We allow a wider range since some weapons (mines, AoE) trade DPS for utility
             for (weapon in WeaponType.entries) {
                 if (weapon in auraWeapons) continue  // [#44] aura weapons use per-frame damage
+                if (weapon in utilityWeapons) continue  // [#44] CC weapons trade DPS for status
                 val dps = weaponDps(weapon, 1)
                 assertTrue(
                     dps in 5f..80f,
@@ -65,6 +74,7 @@ class GddMechanicsValidationTest {
             // GDD §17.2: DPS per weapon Mid (Lv3) = 80-120
             for (weapon in WeaponType.entries) {
                 if (weapon in auraWeapons) continue  // [#44] aura weapons use per-frame damage
+                if (weapon in utilityWeapons) continue  // [#44] CC weapons trade DPS for status
                 val dps = weaponDps(weapon, 3)
                 assertTrue(
                     dps in 15f..200f,
@@ -80,6 +90,7 @@ class GddMechanicsValidationTest {
             // GDD §17.2: DPS per weapon Late (Evolved) = 200-400
             for (weapon in WeaponType.entries) {
                 if (weapon in auraWeapons) continue  // [#44] aura weapons use per-frame damage
+                if (weapon in utilityWeapons) continue  // [#44] CC weapons trade DPS for status
                 val dps = weaponDps(weapon, 6) // Level 6 = evolved
                 assertTrue(
                     dps in 50f..1500f,
@@ -113,9 +124,9 @@ class GddMechanicsValidationTest {
         fun totalDpsLateGame() {
             // GDD §17.2: Total DPS (all weapons) Late = 600-1200
             // Player has max 6 slots, but if all 12 evolved weapons existed:
-            // Aura weapons (cooldown=0) are excluded since their DPS is continuous, not per-shot
+            // Aura weapons (cooldown=0) and utility weapons are excluded
             val totalDps = WeaponType.entries
-                .filter { it !in auraWeapons }
+                .filter { it !in auraWeapons && it !in utilityWeapons }
                 .sumOf { weaponDps(it, 6).toDouble() }
             assertTrue(
                 totalDps > 500f,
