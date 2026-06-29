@@ -68,6 +68,21 @@ fun GameScreen(
     GameScreen(gameState = gameState, onGameOver = onExit, onExit = onExit)
 }
 
+/**
+ * Overload accepting an externally-managed [GameState].
+ *
+ * [#29] Used by [SurvivorTDApp] which registers the GameState with
+ * TestGameBridge synchronously in onPlayClick, before this composable
+ * is composed. This avoids the Compose test clock timing issue.
+ */
+@Composable
+fun GameScreen(
+    gameState: GameState,
+    onExit: () -> Unit
+) {
+    GameScreen(gameState = gameState, onGameOver = onExit, onExit = onExit)
+}
+
 @Composable
 fun GameScreen(
     gameState: GameState,
@@ -115,20 +130,16 @@ fun GameScreen(
     // [#22] TowerSystem — manages placed towers. Was completely missing.
     val towerSystem = remember { com.survivortd.game.systems.TowerSystem(gameState) }
 
-    // [#20][#29] Spawn the player entity and register the TestGameBridge
-    // SYNCHRONOUSLY during the composition pass (inside remember{}, runs once).
+    // [#20][#29] Spawn player and register TestGameBridge.
     //
-    // Previously this was in LaunchedEffect(Unit), which dispatches a coroutine
-    // to Dispatchers.Main. E2E instrumentation tests call Thread.sleep() on the
-    // instrumentation thread and then assert on TestGameBridge.snapshot(). The
-    // dispatched coroutine may not have executed by the time the assertion runs,
-    // causing snapshot() to return null ("TestGameBridge should be active").
-    //
-    // By placing initialization in remember{}, it executes synchronously during
-    // the first composition pass (which happens within performClick()), so the
-    // bridge is guaranteed active before any test assertion.
+    // If gameState was passed from SurvivorTDApp (which already spawned the
+    // player and registered the bridge in onPlayClick), we only need to update
+    // the weapon system reference. Otherwise (e.g., standalone GameScreen use),
+    // we spawn the player here.
     remember {
-        gameState.spawnPlayer()
+        if (gameState.playerIndex < 0) {
+            gameState.spawnPlayer()
+        }
         com.survivortd.game.testing.TestGameBridge.register(gameState, weaponSystem)
         true
     }
