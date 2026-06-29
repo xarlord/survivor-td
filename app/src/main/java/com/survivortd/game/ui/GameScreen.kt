@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.components.RenderComponent
+import com.survivortd.game.config.WeaponType
 import com.survivortd.game.core.GameState
 import com.survivortd.game.core.GameLoop
 import com.survivortd.game.systems.LevelUpSystem
@@ -117,10 +118,28 @@ fun GameScreen(
     // [#32] StatusEffectSystem — processes DoTs and CC. Was completely missing.
     val statusEffectSystem = remember { com.survivortd.game.systems.StatusEffectSystem(gameState) }
 
-    // [#20] Spawn the player entity BEFORE the game loop starts.
-    // This was the #1 reason the canvas was empty — no player existed.
-    LaunchedEffect(Unit) {
-        gameState.spawnPlayer()
+    // [#20][#35] Spawn player and start game loop SYNCHRONOUSLY (not in LaunchedEffect).
+    //
+    // CRITICAL: LaunchedEffect(Unit) runs on the Main dispatcher. During E2E
+    // instrumentation tests, Thread.sleep() on the test thread (which IS the
+    // main thread) blocks the dispatcher, so the LaunchedEffect coroutine never
+    // executes — player never spawns, game loop never starts, enemies never
+    // appear. By doing this in remember{}, it executes during composition.
+    remember {
+        if (gameState.playerIndex < 0) {
+            gameState.spawnPlayer()
+        }
+        // [#35] Player starts with ASSAULT_RIFLE per GDD §3.3 (Commander hero).
+        if (weaponSystem.weapons.isEmpty()) {
+            weaponSystem.addWeapon(WeaponType.ASSAULT_RIFLE)
+        }
+        true
+    }
+
+    // [#35] Register TestGameBridge for E2E tests (debug builds only).
+    remember {
+        com.survivortd.game.testing.TestGameBridge.register(gameState, weaponSystem)
+        true
     }
 
     val gameLoop = remember(gameState) {
@@ -156,13 +175,21 @@ fun GameScreen(
         )
     }
 
-    LaunchedEffect(Unit) {
-        gameLoop.start(this)
+    // [#35] Start game loop SYNCHRONOUSLY using a standalone CoroutineScope
+    // on Dispatchers.Default (background thread). This ensures the loop runs
+    // even when the Main thread is blocked by Thread.sleep() in E2E tests.
+    val gameLoopScope = remember { CoroutineScope(Dispatchers.Default) }
+    remember(gameLoop) {
+        gameLoop.start(gameLoopScope)
+        true
     }
 
     DisposableEffect(Unit) {
         onDispose {
             gameLoop.stop()
+            gameLoopScope.cancel()
+            // [#26] Unregister from TestGameBridge (debug only)
+            com.survivortd.game.testing.TestGameBridge.unregister()
         }
     }
 
