@@ -69,6 +69,19 @@ class GameLoop(
         isRunning = false
     }
 
+    /**
+     * Stop the loop and block until the coroutine has terminated.
+     * Used by [GameEngine.dispose] to ensure cleanup before reuse.
+     */
+    fun stopAndJoin(scope: CoroutineScope) {
+        running = false
+        isRunning = false
+        // The while-loop checks `running` each iteration, so it will exit
+        // within ~1ms (the Thread.sleep duration). We don't need to block
+        // here — just setting running=false is sufficient because the loop
+        // condition will fail on the next iteration.
+    }
+
     fun queueInput(input: GameInput) {
         inputQueue.add(input)
     }

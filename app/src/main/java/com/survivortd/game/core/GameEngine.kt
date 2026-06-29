@@ -93,16 +93,23 @@ class GameEngine(
         gameLoop = GameLoop(
             onUpdate = { dt ->
                 if (state.isPaused || state.isGameOver) return@GameLoop
-                waveSystem.update(dt)
-                enemyAiSystem.update(dt)
-                movementSystem.update(dt)
-                combatSystem.update(dt)
-                towerSystem.update(dt)
-                weaponSystem.update(dt)
-                projectileSystem.update(dt)
-                pickupSystem.update(dt)
-                state.elapsedSeconds += dt
-                state.cleanupDeadEntities()
+                try {
+                    waveSystem.update(dt)
+                    enemyAiSystem.update(dt)
+                    movementSystem.update(dt)
+                    combatSystem.update(dt)
+                    towerSystem.update(dt)
+                    weaponSystem.update(dt)
+                    projectileSystem.update(dt)
+                    pickupSystem.update(dt)
+                    state.elapsedSeconds += dt
+                    state.cleanupDeadEntities()
+                } catch (e: Exception) {
+                    // [#35] Swallow per-tick exceptions to prevent the game loop
+                    // coroutine from crashing silently (which stops all gameplay).
+                    // In debug builds, log to logcat for diagnosis.
+                    android.util.Log.w("GameEngine", "Update tick exception", e)
+                }
             },
             onRender = {
                 onRenderTick?.invoke()
