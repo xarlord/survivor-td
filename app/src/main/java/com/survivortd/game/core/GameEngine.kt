@@ -53,6 +53,7 @@ class GameEngine(
 
     // === RENDER CALLBACK (set by GameScreen for Canvas redraw triggers) ===
     var onRenderTick: (() -> Unit)? = null
+    private var tickCount = 0L  // [#35] diagnostics
 
     // === GAME LOOP ===
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -106,10 +107,11 @@ class GameEngine(
                     pickupSystem.update(dt)
                     state.elapsedSeconds += dt
                     state.cleanupDeadEntities()
+                    // [#35] Periodic diagnostics (every ~5 seconds at 60fps = 300 ticks)
+                    if (tickCount++ % 300 == 0) {
+                        android.util.Log.i("GameEngine", "tick=$tickCount elapsed=${state.elapsedSeconds}s enemies=${state.enemies.size} player_hp=${state.health.getOrNull(state.playerIndex)} isGameOver=${state.isGameOver} isPaused=${state.isPaused}")
+                    }
                 } catch (e: Exception) {
-                    // [#35] Swallow per-tick exceptions to prevent the game loop
-                    // coroutine from crashing silently (which stops all gameplay).
-                    // In debug builds, log to logcat for diagnosis.
                     android.util.Log.w("GameEngine", "Update tick exception", e)
                 }
             },
