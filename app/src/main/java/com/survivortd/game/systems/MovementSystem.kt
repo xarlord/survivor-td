@@ -32,9 +32,8 @@ class MovementSystem(
         // Update enemy movement (chase player)
         updateEnemies(dt)
 
-        // Update elapsed time
-        state.elapsedSeconds += dt
-        state.currentTick++
+        // [#35] Note: elapsedSeconds is incremented by GameEngine.onUpdate,
+        // NOT here (was double-counting, causing game to run at 2x speed).
     }
 
     /**

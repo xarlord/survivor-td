@@ -109,6 +109,7 @@ class GameEngine(
                         projectileSystem.update(dt)
                         pickupSystem.update(dt)
                         state.elapsedSeconds += dt
+                        state.currentTick++
                         state.cleanupDeadEntities()
                         // [#35] Periodic diagnostics (every ~5 seconds at 60fps = 300 ticks)
                         if (tickCount++ % 300L == 0L) {
