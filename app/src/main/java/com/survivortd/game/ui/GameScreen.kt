@@ -43,6 +43,7 @@ import com.survivortd.game.components.RenderComponent
 import com.survivortd.game.core.GameEngine
 import com.survivortd.game.core.GameState
 import com.survivortd.game.systems.UpgradeChoice
+import com.survivortd.game.systems.VirtualJoystick
 import kotlinx.coroutines.delay
 
 /**
