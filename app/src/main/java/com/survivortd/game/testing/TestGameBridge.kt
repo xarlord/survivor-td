@@ -58,7 +58,11 @@ object TestGameBridge {
      */
     fun snapshot(): GameSnapshot? {
         val state = _gameState ?: return null
-        val result = GameSnapshot.from(state, _weaponSystem)
+        // [#35] Synchronize on state to get a consistent snapshot while the
+        // game loop may be mutating the arrays on a background thread.
+        val result = synchronized(state) {
+            GameSnapshot.from(state, _weaponSystem)
+        }
         android.util.Log.i("TestGameBridge", "snapshot() — state=${state.hashCode()} tags=${state.tags.size} enemies=${result.enemyCount} elapsed=${result.elapsedSeconds}")
         return result
     }

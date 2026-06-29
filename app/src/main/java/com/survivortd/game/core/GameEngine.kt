@@ -96,23 +96,27 @@ class GameEngine(
         gameLoop = GameLoop(
             onUpdate = { dt ->
                 if (state.isPaused || state.isGameOver) return@GameLoop
-                try {
-                    waveSystem.update(dt)
-                    enemyAiSystem.update(dt)
-                    movementSystem.update(dt)
-                    combatSystem.update(dt)
-                    towerSystem.update(dt)
-                    weaponSystem.update(dt)
-                    projectileSystem.update(dt)
-                    pickupSystem.update(dt)
-                    state.elapsedSeconds += dt
-                    state.cleanupDeadEntities()
-                    // [#35] Periodic diagnostics (every ~5 seconds at 60fps = 300 ticks)
-                    if (tickCount++ % 300L == 0L) {
-                        android.util.Log.i("GameEngine", "tick=$tickCount elapsed=${state.elapsedSeconds}s enemies=${state.enemies.size} isGameOver=${state.isGameOver} isPaused=${state.isPaused}")
+                // [#35] Synchronize on state to prevent concurrent modification
+                // when TestGameBridge.snapshot() reads from the same arrays.
+                synchronized(state) {
+                    try {
+                        waveSystem.update(dt)
+                        enemyAiSystem.update(dt)
+                        movementSystem.update(dt)
+                        combatSystem.update(dt)
+                        towerSystem.update(dt)
+                        weaponSystem.update(dt)
+                        projectileSystem.update(dt)
+                        pickupSystem.update(dt)
+                        state.elapsedSeconds += dt
+                        state.cleanupDeadEntities()
+                        // [#35] Periodic diagnostics (every ~5 seconds at 60fps = 300 ticks)
+                        if (tickCount++ % 300L == 0L) {
+                            android.util.Log.i("GameEngine", "tick=$tickCount elapsed=${state.elapsedSeconds}s enemies=${state.enemies.size} isGameOver=${state.isGameOver} isPaused=${state.isPaused}")
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w("GameEngine", "Update tick exception", e)
                     }
-                } catch (e: Exception) {
-                    android.util.Log.w("GameEngine", "Update tick exception", e)
                 }
             },
             onRender = {
