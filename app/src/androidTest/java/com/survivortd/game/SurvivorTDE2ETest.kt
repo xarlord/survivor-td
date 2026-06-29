@@ -78,9 +78,19 @@ class SurvivorTDE2ETest {
     /**
      * Helper: Start gameplay and wait for [millis] then return a snapshot.
      * Asserts the bridge is active (game state registered).
+     *
+     * IMPORTANT: The Compose Test framework uses a manual clock by default.
+     * performClick() schedules a recomposition, but Thread.sleep() does NOT
+     * advance that clock, so the GameScreen composition (and its TestGameBridge
+     * registration via remember{}) never executes. We must enable autoAdvance
+     * so the clock processes recompositions during our sleep.
      */
     private fun startGameAndSnapshot(millis: Long): TestGameBridge.GameSnapshot {
         composeRule.onNodeWithTag("play_button").performClick()
+        // Enable clock auto-advance so GameScreen composition runs
+        composeRule.mainClock.autoAdvance = true
+        // Let recomposition flush through — this runs remember{} blocks
+        // (spawnPlayer + TestGameBridge.register)
         Thread.sleep(millis)
         val snap = TestGameBridge.snapshot()
         assertNotNull("TestGameBridge should be active after PLAY (debug build)", snap)

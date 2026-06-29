@@ -146,9 +146,15 @@ object GameBalance {
         return baseDamage * (1f + GameConfig.ENEMY_DAMAGE_SCALE * minute)
     }
 
-    /** Spawn interval at a given minute. */
+    /**
+     * Spawn interval at a given minute.
+     *
+     * GDD §8.2: Spawn Rate = baseRate * (1 + minutesElapsed * 0.20)
+     * Therefore: interval = BASE_SPAWN_INTERVAL / (1 + ENEMY_SPAWN_RATE_SCALE * minute)
+     */
     fun spawnIntervalAtMinute(minute: Int): Float {
-        val interval = GameConfig.BASE_SPAWN_INTERVAL * (1f - GameConfig.ENEMY_SPAWN_RATE_SCALE * minute / 10f)
+        val interval = GameConfig.BASE_SPAWN_INTERVAL /
+            (1f + GameConfig.ENEMY_SPAWN_RATE_SCALE * minute)
         return interval.coerceAtLeast(GameConfig.MIN_SPAWN_INTERVAL)
     }
 }
