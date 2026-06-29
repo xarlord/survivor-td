@@ -89,6 +89,8 @@ class GameEngine(
         // Register with TestGameBridge (debug-only, no-op in release if guarded)
         com.survivortd.game.testing.TestGameBridge.register(state, weaponSystem)
 
+        android.util.Log.i("GameEngine", "start() called — player=${state.playerIndex}, weapons=${weaponSystem.weapons.size}")
+
         // Create and start the game loop
         gameLoop = GameLoop(
             onUpdate = { dt ->
@@ -116,6 +118,7 @@ class GameEngine(
             }
         )
         gameLoop?.start(scope)
+        android.util.Log.i("GameEngine", "gameLoop.start() returned, isRunning=${gameLoop?.isRunning}")
     }
 
     /**
