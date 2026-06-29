@@ -4,6 +4,7 @@ import com.survivortd.game.components.EnemyComponent
 import com.survivortd.game.components.TagComponent
 import com.survivortd.game.components.TowerComponent
 import com.survivortd.game.config.GameConfig
+import com.survivortd.game.config.StatusEffectType
 import com.survivortd.game.config.TowerType
 import com.survivortd.game.core.GameState
 import kotlin.math.atan2
@@ -266,6 +267,8 @@ class TowerSystem(
                 // Poison ignores armor
                 state.healths[i].currentHp -= dps * (1f / stats.fireRate)
                 if (state.healths[i].isDead) tower.totalKills++
+                // Apply POISON status effect (DoT, ignores armor per GDD §3.3)
+                applyStatus(i, dps, stats.fireRate)
             }
         }
     }
@@ -280,5 +283,26 @@ class TowerSystem(
         if (enemyIndex < 0 || enemyIndex >= state.positions.size) return Float.MAX_VALUE
         val pos = state.positions[enemyIndex]
         return hypot(pos.x - tower.x, pos.y - tower.y)
+    }
+
+    /**
+     * Apply a POISON status effect to an enemy (DoT, ignores armor).
+     */
+    private fun applyStatus(enemyIndex: Int, dps: Float, fireRate: Float) {
+        if (enemyIndex < 0 || enemyIndex >= state.statusEffects.size) return
+        val se = state.statusEffects[enemyIndex]
+        val poisonDmg = dps * 0.3f  // 30% of tower DPS as poison per tick
+        val existing = se.effects.find { it.type == StatusEffectType.POISON }
+        if (existing != null) {
+            existing.duration = maxOf(existing.duration, 3f)
+        } else {
+            se.effects.add(
+                com.survivortd.game.components.StatusEffectsComponent.ActiveStatus(
+                    type = StatusEffectType.POISON,
+                    duration = 3f,
+                    magnitude = poisonDmg
+                )
+            )
+        }
     }
 }
