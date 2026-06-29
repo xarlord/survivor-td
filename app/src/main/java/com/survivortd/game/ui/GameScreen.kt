@@ -42,12 +42,14 @@ import androidx.compose.ui.unit.sp
 import com.survivortd.game.components.RenderComponent
 import com.survivortd.game.core.GameState
 import com.survivortd.game.core.GameLoop
+import com.survivortd.game.config.WeaponType
 import com.survivortd.game.systems.LevelUpSystem
 import com.survivortd.game.systems.UpgradeChoice
 import com.survivortd.game.systems.VirtualJoystick
 import com.survivortd.game.systems.WeaponSystem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -140,6 +142,10 @@ fun GameScreen(
         if (gameState.playerIndex < 0) {
             gameState.spawnPlayer()
         }
+        // [#35] Player starts with ASSAULT_RIFLE per GDD §3.3 (Commander hero).
+        if (weaponSystem.weapons.isEmpty()) {
+            weaponSystem.addWeapon(WeaponType.ASSAULT_RIFLE)
+        }
         com.survivortd.game.testing.TestGameBridge.register(gameState, weaponSystem)
         true
     }
@@ -176,13 +182,23 @@ fun GameScreen(
         )
     }
 
-    LaunchedEffect(Unit) {
-        gameLoop.start(this)
+    // [#35] Start game loop SYNCHRONOUSLY in a remember{} block.
+    // The old code used LaunchedEffect(Unit) which launches a coroutine on the
+    // Main dispatcher. During E2E instrumentation tests, Thread.sleep() on the
+    // test thread (which IS the main thread) blocks the dispatcher, so the
+    // coroutine never runs and the game loop never starts.
+    // By starting in remember{} with a standalone CoroutineScope(Dispatchers.Default),
+    // start() executes during composition and the loop runs on a background thread.
+    val gameLoopScope = remember { CoroutineScope(Dispatchers.Default) }
+    remember(gameLoop) {
+        gameLoop.start(gameLoopScope)
+        true
     }
 
     DisposableEffect(Unit) {
         onDispose {
             gameLoop.stop()
+            gameLoopScope.cancel()
             // [#26] Unregister from TestGameBridge (debug only)
             com.survivortd.game.testing.TestGameBridge.unregister()
         }
