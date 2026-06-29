@@ -64,9 +64,19 @@ class GameEngine(
      */
     val isRunning: Boolean get() = gameLoop?.isRunning == true
 
+    companion object {
+        // [#35] Track the currently-active engine so we can dispose it when a
+        // new one starts. During E2E tests, multiple engines can be created
+        // sequentially (one per test), and old ones must be stopped to free
+        // the Dispatchers.Default thread pool for the new engine's coroutine.
+        @Volatile
+        private var currentInstance: GameEngine? = null
+    }
+
     /**
      * Initialize and start the game loop.
      *
+     * - Disposes any previously-active engine (ensures only one loop runs)
      * - Spawns the player if not already spawned
      * - Adds the starting weapon (ASSAULT_RIFLE)
      * - Registers with TestGameBridge (debug builds)
@@ -75,6 +85,14 @@ class GameEngine(
      * Safe to call multiple times — subsequent calls are no-ops.
      */
     fun start() {
+        // [#35] Dispose any previously-active engine first
+        val prev = currentInstance
+        if (prev != null && prev !== this) {
+            prev.stop()
+            currentInstance = null
+        }
+        currentInstance = this
+
         if (gameLoop?.isRunning == true) return
 
         // Spawn player if needed
@@ -140,6 +158,10 @@ class GameEngine(
     fun stop() {
         gameLoop?.stop()
         gameLoop = null
+        // Clear singleton reference if it's us
+        if (currentInstance === this) {
+            currentInstance = null
+        }
         // Only unregister if WE are still the active engine
         if (com.survivortd.game.testing.TestGameBridge.rawState() === state) {
             com.survivortd.game.testing.TestGameBridge.unregister()
