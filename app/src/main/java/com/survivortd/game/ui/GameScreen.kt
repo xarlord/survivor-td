@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.components.RenderComponent
+import com.survivortd.game.config.WeaponType
 import com.survivortd.game.core.GameState
 import com.survivortd.game.core.GameLoop
 import com.survivortd.game.systems.LevelUpSystem
@@ -48,6 +49,8 @@ import com.survivortd.game.systems.VirtualJoystick
 import com.survivortd.game.systems.WeaponSystem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -130,7 +133,7 @@ fun GameScreen(
     // [#22] TowerSystem — manages placed towers. Was completely missing.
     val towerSystem = remember { com.survivortd.game.systems.TowerSystem(gameState) }
 
-    // [#20][#29] Spawn player and register TestGameBridge.
+    // [#20][#29][#35] Spawn player, add starting weapon, and register TestGameBridge.
     //
     // If gameState was passed from SurvivorTDApp (which already spawned the
     // player and registered the bridge in onPlayClick), we only need to update
@@ -140,8 +143,23 @@ fun GameScreen(
         if (gameState.playerIndex < 0) {
             gameState.spawnPlayer()
         }
+        // [#35] Ensure the player always starts with the ASSAULT_RIFLE weapon.
+        // Without this, WeaponSystem.weapons is empty and no auto-attacks fire.
+        if (weaponSystem.weapons.none { it.type == WeaponType.ASSAULT_RIFLE }) {
+            weaponSystem.addWeapon(WeaponType.ASSAULT_RIFLE)
+        }
         com.survivortd.game.testing.TestGameBridge.register(gameState, weaponSystem)
         true
+    }
+
+    // [#35] Dedicated CoroutineScope for the game loop, created in remember{}
+    // so it exists BEFORE any LaunchedEffect runs. This is critical for E2E
+    // tests: the Compose test framework blocks the main thread via
+    // Thread.sleep(), which prevents LaunchedEffect coroutines from ever
+    // dispatching. By starting the loop synchronously in remember{} on a
+    // background-thread scope, the game runs independently of the main thread.
+    val gameLoopScope = remember {
+        CoroutineScope(Dispatchers.Default + SupervisorJob())
     }
 
     val gameLoop = remember(gameState) {
@@ -176,13 +194,20 @@ fun GameScreen(
         )
     }
 
-    LaunchedEffect(Unit) {
-        gameLoop.start(this)
+    // [#35] Start the game loop SYNCHRONOUSLY during composition (in remember{}),
+    // NOT in LaunchedEffect. LaunchedEffect dispatches on the main thread, which
+    // is blocked by Thread.sleep() during E2E instrumentation tests, so the loop
+    // would never start. By calling start() here with a Dispatchers.Default
+    // scope, the loop runs on a background thread independent of the main thread.
+    remember(gameState) {
+        gameLoop.start(gameLoopScope)
+        true
     }
 
     DisposableEffect(Unit) {
         onDispose {
             gameLoop.stop()
+            gameLoopScope.cancel()
             // [#26] Unregister from TestGameBridge (debug only)
             com.survivortd.game.testing.TestGameBridge.unregister()
         }
