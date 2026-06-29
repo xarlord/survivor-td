@@ -40,12 +40,14 @@ object TestGameBridge {
     fun register(gameState: GameState, weaponSystem: WeaponSystem? = null) {
         _gameState = gameState
         _weaponSystem = weaponSystem
+        android.util.Log.i("TestGameBridge", "register() — state=${gameState.hashCode()} weapons=${weaponSystem?.hashCode()}")
     }
 
     /**
      * Clear the registration. Called from GameScreen on dispose (debug builds).
      */
     fun unregister() {
+        android.util.Log.i("TestGameBridge", "unregister() — old state=${_gameState?.hashCode()}", Exception("unregister stacktrace"))
         _gameState = null
         _weaponSystem = null
     }
