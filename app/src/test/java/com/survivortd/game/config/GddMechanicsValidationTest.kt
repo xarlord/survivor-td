@@ -32,10 +32,11 @@ class GddMechanicsValidationTest {
 
         /**
          * Utility/CC weapons that trade raw DPS for crowd control effects.
-         * Their primary value is status effects (freeze, slow), not damage.
+         * Their primary value is status effects (freeze, slow) or support, not damage.
          */
         private val utilityWeapons = setOf(
-            WeaponType.FROST_NOVA  // applies FREEZE, damage is secondary
+            WeaponType.FROST_NOVA,      // applies FREEZE, damage is secondary
+            WeaponType.HEALING_PULSE    // support weapon — heals player, not offensive
         )
 
         /**
