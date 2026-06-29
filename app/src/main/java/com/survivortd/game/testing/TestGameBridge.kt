@@ -58,7 +58,9 @@ object TestGameBridge {
      */
     fun snapshot(): GameSnapshot? {
         val state = _gameState ?: return null
-        return GameSnapshot.from(state, _weaponSystem)
+        val result = GameSnapshot.from(state, _weaponSystem)
+        android.util.Log.i("TestGameBridge", "snapshot() — state=${state.hashCode()} tags=${state.tags.size} enemies=${result.enemyCount} elapsed=${result.elapsedSeconds}")
+        return result
     }
 
     /**
