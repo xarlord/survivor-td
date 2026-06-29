@@ -115,12 +115,22 @@ fun GameScreen(
     // [#22] TowerSystem — manages placed towers. Was completely missing.
     val towerSystem = remember { com.survivortd.game.systems.TowerSystem(gameState) }
 
-    // [#20] Spawn the player entity BEFORE the game loop starts.
-    // This was the #1 reason the canvas was empty — no player existed.
-    LaunchedEffect(Unit) {
+    // [#20][#29] Spawn the player entity and register the TestGameBridge
+    // SYNCHRONOUSLY during the composition pass (inside remember{}, runs once).
+    //
+    // Previously this was in LaunchedEffect(Unit), which dispatches a coroutine
+    // to Dispatchers.Main. E2E instrumentation tests call Thread.sleep() on the
+    // instrumentation thread and then assert on TestGameBridge.snapshot(). The
+    // dispatched coroutine may not have executed by the time the assertion runs,
+    // causing snapshot() to return null ("TestGameBridge should be active").
+    //
+    // By placing initialization in remember{}, it executes synchronously during
+    // the first composition pass (which happens within performClick()), so the
+    // bridge is guaranteed active before any test assertion.
+    remember {
         gameState.spawnPlayer()
-        // [#26] Register with TestGameBridge for object-level E2E tests (debug only)
         com.survivortd.game.testing.TestGameBridge.register(gameState, weaponSystem)
+        true
     }
 
     val gameLoop = remember(gameState) {

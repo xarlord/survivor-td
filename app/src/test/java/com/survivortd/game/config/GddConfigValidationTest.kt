@@ -1,5 +1,6 @@
 package com.survivortd.game.config
 
+import com.survivortd.game.components.EnemyComponent
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
