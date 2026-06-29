@@ -114,6 +114,8 @@ fun GameScreen(
     val waveSystem = remember { com.survivortd.game.systems.WaveSystem(gameState) }
     // [#22] TowerSystem — manages placed towers. Was completely missing.
     val towerSystem = remember { com.survivortd.game.systems.TowerSystem(gameState) }
+    // [#32] StatusEffectSystem — processes DoTs and CC. Was completely missing.
+    val statusEffectSystem = remember { com.survivortd.game.systems.StatusEffectSystem(gameState) }
 
     // [#20] Spawn the player entity BEFORE the game loop starts.
     // This was the #1 reason the canvas was empty — no player existed.
@@ -127,9 +129,10 @@ fun GameScreen(
                 if (gameState.isPaused || gameState.isGameOver) return@GameLoop
                 // [#21] Wave system FIRST — spawns enemies for other systems to process
                 waveSystem.update(dt)
-                // System update order: AI → Movement → Combat → Towers → Weapons → Projectiles → Pickups
+                // System update order: AI → Movement → Status → Combat → Towers → Weapons → Projectiles → Pickups
                 enemyAiSystem.update(dt)
                 movementSystem.update(dt)
+                statusEffectSystem.update(dt)
                 combatSystem.update(dt)
                 // [#22] Tower system — auto-targets and fires at enemies
                 towerSystem.update(dt)

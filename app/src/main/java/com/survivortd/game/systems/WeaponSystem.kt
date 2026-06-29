@@ -315,6 +315,8 @@ class WeaponSystem(
             val angleDiff = abs(normalizeAngle(angle - facingAngle))
             if (angleDiff <= arcHalfWidth) {
                 dealDamage(i, dmg, w.type)
+                // Katana applies BLEED (physical DoT) — GDD §3.3
+                applyStatus(i, StatusEffectType.BLEED, 4f, dmg * 0.15f)
                 if (state.healths[i].isDead) killed++
             }
         }
@@ -346,6 +348,9 @@ class WeaponSystem(
             pierce = 0,
             lifetime = 3f,
             aoeRadius = s.aoeRadius * getAoEMult(),
+            onHitEffect = StatusEffectType.BURN,
+            onHitEffectDuration = 3f,
+            onHitEffectMagnitude = 8f * getDamageMult() * 0.2f,  // 20% of weapon damage per tick
             ownerWeapon = w.type
         )
     }
@@ -620,7 +625,10 @@ class WeaponSystem(
         x: Float, y: Float, vx: Float, vy: Float,
         damage: Float, pierce: Int, lifetime: Float,
         aoeRadius: Float = 0f, isBoomerang: Boolean = false,
-        isMine: Boolean = false, ownerWeapon: WeaponType
+        isMine: Boolean = false, ownerWeapon: WeaponType,
+        onHitEffect: StatusEffectType? = null,
+        onHitEffectDuration: Float = 0f,
+        onHitEffectMagnitude: Float = 0f
     ) {
         val id = state.spawnProjectile(x = x, y = y)
         state.velocities[id].x = vx
@@ -632,6 +640,9 @@ class WeaponSystem(
         state.projectiles[id].isBoomerang = isBoomerang
         state.projectiles[id].isMine = isMine
         state.projectiles[id].ownerWeapon = ownerWeapon
+        state.projectiles[id].onHitEffect = onHitEffect
+        state.projectiles[id].onHitEffectDuration = onHitEffectDuration
+        state.projectiles[id].onHitEffectMagnitude = onHitEffectMagnitude
     }
 
     // ================================================================
