@@ -108,8 +108,8 @@ class GameEngine(
                     state.elapsedSeconds += dt
                     state.cleanupDeadEntities()
                     // [#35] Periodic diagnostics (every ~5 seconds at 60fps = 300 ticks)
-                    if (tickCount++ % 300 == 0) {
-                        android.util.Log.i("GameEngine", "tick=$tickCount elapsed=${state.elapsedSeconds}s enemies=${state.enemies.size} player_hp=${state.health.getOrNull(state.playerIndex)} isGameOver=${state.isGameOver} isPaused=${state.isPaused}")
+                    if (tickCount++ % 300L == 0L) {
+                        android.util.Log.i("GameEngine", "tick=$tickCount elapsed=${state.elapsedSeconds}s enemies=${state.enemies.size} isGameOver=${state.isGameOver} isPaused=${state.isPaused}")
                     }
                 } catch (e: Exception) {
                     android.util.Log.w("GameEngine", "Update tick exception", e)
