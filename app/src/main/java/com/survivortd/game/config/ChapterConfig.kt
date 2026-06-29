@@ -41,32 +41,40 @@ data class ChapterConfig(
                 EnemyComponent.EnemyData.ZOMBIE to 40,
                 EnemyComponent.EnemyData.RUNNER to 30,
                 EnemyComponent.EnemyData.BRUTE to 15,
-                EnemyComponent.EnemyData.SPITTER to 15
+                EnemyComponent.EnemyData.SPITTER to 10,
+                EnemyComponent.EnemyData.FLYER to 5
             ),
             8 to mapOf(
-                EnemyComponent.EnemyData.ZOMBIE to 35,
-                EnemyComponent.EnemyData.RUNNER to 25,
+                EnemyComponent.EnemyData.ZOMBIE to 30,
+                EnemyComponent.EnemyData.RUNNER to 22,
                 EnemyComponent.EnemyData.BRUTE to 15,
                 EnemyComponent.EnemyData.SPITTER to 10,
                 EnemyComponent.EnemyData.BOMBER to 10,
-                EnemyComponent.EnemyData.HEALER to 5
+                EnemyComponent.EnemyData.HEALER to 5,
+                EnemyComponent.EnemyData.FLYER to 5,
+                EnemyComponent.EnemyData.ELITE to 3
             ),
             10 to mapOf(
-                EnemyComponent.EnemyData.ZOMBIE to 30,
-                EnemyComponent.EnemyData.RUNNER to 25,
-                EnemyComponent.EnemyData.BRUTE to 20,
+                EnemyComponent.EnemyData.ZOMBIE to 25,
+                EnemyComponent.EnemyData.RUNNER to 20,
+                EnemyComponent.EnemyData.BRUTE to 18,
                 EnemyComponent.EnemyData.SPITTER to 10,
                 EnemyComponent.EnemyData.BOMBER to 10,
-                EnemyComponent.EnemyData.HEALER to 5
+                EnemyComponent.EnemyData.HEALER to 5,
+                EnemyComponent.EnemyData.SHIELDER to 5,
+                EnemyComponent.EnemyData.FLYER to 5,
+                EnemyComponent.EnemyData.ELITE to 2
             ),
             13 to mapOf(
-                EnemyComponent.EnemyData.ZOMBIE to 20,
-                EnemyComponent.EnemyData.RUNNER to 20,
-                EnemyComponent.EnemyData.BRUTE to 20,
+                EnemyComponent.EnemyData.ZOMBIE to 18,
+                EnemyComponent.EnemyData.RUNNER to 17,
+                EnemyComponent.EnemyData.BRUTE to 18,
                 EnemyComponent.EnemyData.SPITTER to 15,
                 EnemyComponent.EnemyData.BOMBER to 10,
-                EnemyComponent.EnemyData.HEALER to 10,
-                EnemyComponent.EnemyData.SHIELDER to 5
+                EnemyComponent.EnemyData.HEALER to 8,
+                EnemyComponent.EnemyData.SHIELDER to 6,
+                EnemyComponent.EnemyData.FLYER to 5,
+                EnemyComponent.EnemyData.ELITE to 3
             )
         )
 
