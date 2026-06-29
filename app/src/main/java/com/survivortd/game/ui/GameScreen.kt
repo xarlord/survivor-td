@@ -40,19 +40,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.components.RenderComponent
-import com.survivortd.game.config.WeaponType
+import com.survivortd.game.core.GameEngine
 import com.survivortd.game.core.GameState
-import com.survivortd.game.core.GameLoop
-import com.survivortd.game.systems.LevelUpSystem
 import com.survivortd.game.systems.UpgradeChoice
-import com.survivortd.game.systems.VirtualJoystick
-import com.survivortd.game.systems.WeaponSystem
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /**
  * Root game screen. Manages the strict rendering layer hierarchy:
@@ -60,39 +51,25 @@ import kotlinx.coroutines.launch
  *   2. HUD Overlay (Compose composables — HP, XP, timer)
  *   3. Virtual Joystick (floating, left-half of screen)
  *
+ * [#35] The game engine (all ECS systems + game loop) is created and started
+ * SYNCHRONOUSLY by [com.survivortd.game.SurvivorTDApp] in onPlayClick, BEFORE
+ * this composable runs. GameScreen is now purely a VIEW layer — it reads from
+ * the engine's [GameState] for rendering and forwards input/level-up choices
+ * to the engine. This decouples game logic from Compose's composition
+ * lifecycle, which is essential for E2E instrumentation tests where
+ * Thread.sleep() blocks the main thread.
+ *
  * CRITICAL: Game state is read inside drawBehind lambdas, NOT as Compose
  * State objects. This prevents recomposition cascades that destroy FPS.
  */
 @Composable
 fun GameScreen(
-    onExit: () -> Unit
-) {
-    val gameState = remember { GameState() }
-    GameScreen(gameState = gameState, onGameOver = onExit, onExit = onExit)
-}
-
-/**
- * Overload accepting an externally-managed [GameState].
- *
- * [#29] Used by [SurvivorTDApp] which registers the GameState with
- * TestGameBridge synchronously in onPlayClick, before this composable
- * is composed. This avoids the Compose test clock timing issue.
- */
-@Composable
-fun GameScreen(
-    gameState: GameState,
-    onExit: () -> Unit
-) {
-    GameScreen(gameState = gameState, onGameOver = onExit, onExit = onExit)
-}
-
-@Composable
-fun GameScreen(
-    gameState: GameState,
-    onGameOver: () -> Unit,
+    engine: GameEngine,
     onExit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val gameState = engine.state
+
     // Only these trigger recomposition for UI — NOT game positions
     var hudHp by remember { mutableFloatStateOf(1f) }
     var hudXp by remember { mutableFloatStateOf(0f) }
@@ -103,113 +80,40 @@ fun GameScreen(
 
     // [#23] Redraw trigger — increments every frame to force Canvas recomposition.
     // Game entity positions are plain Kotlin objects (NOT Compose State), so the
-    // Canvas would never redraw without this. The game loop calls onRender on a
-    // background thread; we bump this on the Main dispatcher to trigger redraw.
-    // Using Choreographer for VSYNC-aligned updates (no flooding main thread).
+    // Canvas would never redraw without this. The engine's game loop calls
+    // onRenderTick on a background thread; we bump this on the Main dispatcher
+    // to trigger redraw.
     var redrawTrigger by remember { mutableIntStateOf(0) }
     val renderHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     val renderPending = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+
+    // Wire the engine's render callback to our redraw trigger
+    remember(engine) {
+        engine.onRenderTick = {
+            if (renderPending.compareAndSet(false, true)) {
+                renderHandler.post {
+                    renderPending.set(false)
+                    redrawTrigger = (redrawTrigger + 1) % 1_000_000
+                }
+            }
+        }
+        true
+    }
 
     // Joystick visual state — triggers redraw at ~60Hz
     var joystickActive by remember { mutableStateOf(false) }
     var joystickAnchor by remember { mutableStateOf(Offset.Zero) }
     var joystickKnob by remember { mutableStateOf(Offset.Zero) }
 
-    val joystick = remember { VirtualJoystick(gameState) }
-
     // Level-up system state
-    val weaponSystem = remember { WeaponSystem(gameState) }
-    val levelUpSystem = remember { LevelUpSystem(gameState, weaponSystem) }
     var levelUpChoices by remember { mutableStateOf<List<UpgradeChoice>>(emptyList()) }
 
-    // Create ALL game systems
-    val movementSystem = remember { com.survivortd.game.systems.MovementSystem(gameState) }
-    val combatSystem = remember { com.survivortd.game.systems.CombatSystem(gameState) }
-    val enemyAiSystem = remember { com.survivortd.game.systems.EnemyAISystem(gameState) }
-    val pickupSystem = remember { com.survivortd.game.systems.PickupSystem(gameState) }
-    val projectileSystem = remember { com.survivortd.game.systems.ProjectileSystem(gameState) }
-    // [#21] WaveSystem — spawns enemies continuously. Was completely missing.
-    val waveSystem = remember { com.survivortd.game.systems.WaveSystem(gameState) }
-    // [#22] TowerSystem — manages placed towers. Was completely missing.
-    val towerSystem = remember { com.survivortd.game.systems.TowerSystem(gameState) }
-
-    // [#20][#29][#35] Spawn player, add starting weapon, and register TestGameBridge.
-    //
-    // If gameState was passed from SurvivorTDApp (which already spawned the
-    // player and registered the bridge in onPlayClick), we only need to update
-    // the weapon system reference. Otherwise (e.g., standalone GameScreen use),
-    // we spawn the player here.
-    remember {
-        if (gameState.playerIndex < 0) {
-            gameState.spawnPlayer()
-        }
-        // [#35] Ensure the player always starts with the ASSAULT_RIFLE weapon.
-        // Without this, WeaponSystem.weapons is empty and no auto-attacks fire.
-        if (weaponSystem.weapons.none { it.type == WeaponType.ASSAULT_RIFLE }) {
-            weaponSystem.addWeapon(WeaponType.ASSAULT_RIFLE)
-        }
-        com.survivortd.game.testing.TestGameBridge.register(gameState, weaponSystem)
-        true
-    }
-
-    // [#35] Dedicated CoroutineScope for the game loop, created in remember{}
-    // so it exists BEFORE any LaunchedEffect runs. This is critical for E2E
-    // tests: the Compose test framework blocks the main thread via
-    // Thread.sleep(), which prevents LaunchedEffect coroutines from ever
-    // dispatching. By starting the loop synchronously in remember{} on a
-    // background-thread scope, the game runs independently of the main thread.
-    val gameLoopScope = remember {
-        CoroutineScope(Dispatchers.Default + SupervisorJob())
-    }
-
-    val gameLoop = remember(gameState) {
-        GameLoop(
-            onUpdate = { dt ->
-                if (gameState.isPaused || gameState.isGameOver) return@GameLoop
-                // [#21] Wave system FIRST — spawns enemies for other systems to process
-                waveSystem.update(dt)
-                // System update order: AI → Movement → Combat → Towers → Weapons → Projectiles → Pickups
-                enemyAiSystem.update(dt)
-                movementSystem.update(dt)
-                combatSystem.update(dt)
-                // [#22] Tower system — auto-targets and fires at enemies
-                towerSystem.update(dt)
-                weaponSystem.update(dt)
-                projectileSystem.update(dt)
-                pickupSystem.update(dt)
-                gameState.elapsedSeconds += dt
-                gameState.cleanupDeadEntities()
-            },
-            onRender = {
-                // [#23] Trigger Canvas redraw by bumping state on Main thread.
-                // Guard with AtomicBoolean to prevent flooding Main thread —
-                // only one render callback queued at a time.
-                if (renderPending.compareAndSet(false, true)) {
-                    renderHandler.post {
-                        renderPending.set(false)
-                        redrawTrigger = (redrawTrigger + 1) % 1_000_000
-                    }
-                }
-            }
-        )
-    }
-
-    // [#35] Start the game loop SYNCHRONOUSLY during composition (in remember{}),
-    // NOT in LaunchedEffect. LaunchedEffect dispatches on the main thread, which
-    // is blocked by Thread.sleep() during E2E instrumentation tests, so the loop
-    // would never start. By calling start() here with a Dispatchers.Default
-    // scope, the loop runs on a background thread independent of the main thread.
-    remember(gameState) {
-        gameLoop.start(gameLoopScope)
-        true
-    }
-
-    DisposableEffect(Unit) {
+    // [#35] Stop the engine on dispose — the loop was started by SurvivorTDApp
+    DisposableEffect(engine) {
         onDispose {
-            gameLoop.stop()
-            gameLoopScope.cancel()
-            // [#26] Unregister from TestGameBridge (debug only)
-            com.survivortd.game.testing.TestGameBridge.unregister()
+            engine.onRenderTick = null
+            engine.dispose()
+            onExit()
         }
     }
 
@@ -217,7 +121,7 @@ fun GameScreen(
         // === LAYER 1: Game Canvas + Touch Input ===
         GameCanvasView(
             gameState = gameState,
-            joystick = joystick,
+            joystick = engine.joystick,
             joystickActive = joystickActive,
             joystickAnchor = joystickAnchor,
             joystickKnob = joystickKnob,
@@ -245,10 +149,10 @@ fun GameScreen(
                 level = hudLevel,
                 choices = levelUpChoices,
                 onChoiceSelected = { choice ->
-                    levelUpSystem.applyChoice(choice)
+                    engine.levelUpSystem.applyChoice(choice)
                     if (gameState.pendingLevelUps > 0) {
                         // Another level-up queued — generate new choices
-                        levelUpChoices = levelUpSystem.generateChoices()
+                        levelUpChoices = engine.levelUpSystem.generateChoices()
                     } else {
                         levelUpChoices = emptyList()
                         gameState.isPaused = false
@@ -275,11 +179,10 @@ fun GameScreen(
             // Check for level-up → generate choices and pause game
             if (gameState.pendingLevelUps > 0 && levelUpChoices.isEmpty()) {
                 gameState.isPaused = true
-                levelUpChoices = levelUpSystem.generateChoices()
+                levelUpChoices = engine.levelUpSystem.generateChoices()
             }
 
             if (gameState.isGameOver) {
-                onGameOver()
                 break
             }
             delay(100)
