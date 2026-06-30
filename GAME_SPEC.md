@@ -175,7 +175,7 @@ On each level-up, generate 3 cards from a weighted pool:
 
 **Evolution override**: If a weapon is Level 5 AND its catalyst passive is owned, the evolution card is **guaranteed** to appear.
 
-###  evolution System (Detailed)
+### 6.4 Evolution System (Detailed)
 ```
 Weapon reaches Level 5 + Catalyst Passive owned →
 Next level-up: Evolution card appears (guaranteed) →
@@ -214,7 +214,7 @@ Between waves (every 3 minutes), a **Build Phase** appears (10 seconds). The pla
 
 ---
 
-##  build phase.
+### 7.5 Auto-Build (Focus Mode)
 - If playing offline or with "Focus Mode" enabled, auto-build places towers optimally.
 
 ---
@@ -506,8 +506,6 @@ XP → Spawn → Camera → Render
 16 systems, deterministic tick order
 ```
 
- 16 systems, deterministic tick order
-
 ---
 
 ## 15. LEVEL DATA FORMAT (JSON)
@@ -577,11 +575,7 @@ XP → Spawn → Camera → Render
 - **Boss music**: Heavy, dramatic (1 min loop)
 - **Build phase**: Brief tension builder (10s)
 
-###  Survivor TD, the "pickup magnet" ability pulls all gems toward the player.
-
----
-
-## 16. AUDIO DESIGN (continued)
+> **Design note:** In Survivor TD, the "pickup magnet" ability pulls all gems toward the player.
 
 ### 16.3 Audio Synthesis Pipeline
 All audio synthesized programmatically via `scripts/synth_audio.py`:
@@ -1260,7 +1254,7 @@ Sunday: Review week progress, prepare for new challenges
 Week 1: Push leaderboard rankings
 Week 2: Grind gold for expensive upgrades
 Week 3: Attempt New Game+ clears
-Week 4: Prepare for end-of-month结算 (leaderboard rewards)
+Week 4: Prepare for end-of-month leaderboard settlement (rewards distributed)
 ```
 
 ### Season System (Post-Launch)
@@ -1273,13 +1267,13 @@ Week 4: Prepare for end-of-month结算 (leaderboard rewards)
   - 2 new weapons
   - 1 new chapter
   - Seasonal challenge (e.g., "Survival mode")
-- **End of Season:** Leaderboard结算, rewards distributed, new season starts
+- **End of Season:** Leaderboard settlement, rewards distributed, new season starts
 
 ---
 
 ## 23. BALANCE TARGETS
 
-### 17.1 Per-Match Metrics
+### 23.1 Per-Match Metrics
 | Metric | Target | Acceptable Range |
 |--------|--------|------------------|
 | Match duration (death) | 5-8 min (new player) | 3-15 min |
@@ -1289,24 +1283,24 @@ Week 4: Prepare for end-of-month结算 (leaderboard rewards)
 | Action rate | ≥2/s (weapon fires + movement) | 1-5/s |
 | Death cause | Mostly boss waves or overwhelm | — |
 
-### 15.2 Difficulty Curves
-See `scripts/simulate_balance.py` for the mathematical model.
+### 23.2 Difficulty Curves
+See `scripts/simulate_balance.py` for the mathematical model. Target win rate is 40-60% on Normal difficulty.
 
----
-
-## 40-60% on Normal difficulty.
-
-### 17.2 Weapon Balance Targets
+### 23.3 Weapon Balance Targets
 | Stat | Early (Lv1) | Mid (Lv3) | Late (Evolved) |
 |------|-------------|-----------|----------------|
 | DPS per weapon | 30-50 | 80-120 | 200-400 |
 | Total DPS (all weapons) | 30-50 | 200-400 | 600-1200 |
 | Enemy HP at min 1 | 20-30 | — | — |
 | Enemy HP at min 10 | 200-300 | — | — |
-| Enemy HP at min 15 | 500-800 | — | weapons: 600-1200 DPS vs 500-800 HP enemies = 1-2 kills per second per weapon
-- Late game: 6 weapons × 200 DPS = 1200 DPS vs enemies spawning at 10/s × 500 HP = need to kill faster than spawn
+| Enemy HP at min 15 | 500-800 | — | weapons: 600-1200 DPS vs 500-800 HP enemies = 1-2 kills per second per weapon |
 
-### 17.3 Economy Balance
+Balance conclusions from the simulation model:
+- Late game: 6 weapons × 200 DPS = 1200 DPS vs enemies spawning at 10/s × 500 HP = need to kill faster than spawn.
+- All weapons have clear upgrade paths to evolved forms.
+- Evolutions feel powerful but not game-breaking (3-4x base DPS).
+
+### 23.4 Economy Balance
 | Resource | Early Game | Mid Game | Late Game |
 |----------|-----------|----------|-----------|
 | Gold per match | 100-300 | 300-600 | 500-1000 |
@@ -1316,15 +1310,9 @@ See `scripts/simulate_balance.py` for the mathematical model.
 
 ---
 
-##  simulation.
-4. All weapons have clear upgrade paths to evolved forms.
-5. Evolutions feel powerful but not game-breaking (3-4x base DPS).
+## 24. SAVE SYSTEM
 
----
-
-## 18. SAVE SYSTEM
-
-### 18.1 Saved Data
+### 24.1 Saved Data
 ```json
 {
   "version": 1,
@@ -1370,7 +1358,7 @@ See `scripts/simulate_balance.py` for the mathematical model.
 
 ---
 
-## 19. ANALYTICS EVENTS
+## 25. ANALYTICS EVENTS
 
 | Event | When | Params |
 |-------|------|--------|
@@ -1389,9 +1377,9 @@ See `scripts/simulate_balance.py` for the mathematical model.
 
 ---
 
-## 20. DEVELOPMENT ROADMAP (Phased)
+## 26. DEVELOPMENT ROADMAP (Phased)
 
-### 20.1 MVP Scope (First Playable — Week 1)
+### 26.1 MVP Scope (First Playable — Week 1)
 - [ ] Core game loop: move, auto-attack, kill, XP, level up, choose upgrade
 - [ ] 3 weapons: Assault Rifle, Katana, Lightning Orb
 -  [ ] 3 enemy types: Zombie, Runner, Brute
@@ -1414,7 +1402,19 @@ See `scripts/simulate_balance.py` for the mathematical model.
 - [ ] Full audio
 - [ ] Settings menu
 
-### 20.3 Launch Scope (Week 3)
+### 26.2 Vertical Slice (Week 2)
+- [ ] All 12 weapons + evolutions
+- [ ] All 12 passive items
+-  [ ] All 10 enemy types + boss
+- [ ] Tower system (6 types + upgrades)
+- [ ] 3 heroes
+- [ ] Build phase
+- [ ] Meta-progression (permanent upgrades)
+- [ ] Save system
+- [ ] Full audio
+- [ ] Settings menu
+
+### 26.3 Launch Scope (Week 3)
 - [ ] 5 chapters + 5 bosses
 - [ ] All 6 heroes
 - [ ] Monetization (rewarded ads + IAP)
@@ -1422,20 +1422,17 @@ See `scripts/simulate_balance.py` for the mathematical model.
 -  [ ] Analytics
 - [ ] Polishing pass: game feel, particles, screen shake
 - [ ] Performance optimization
-- roadmap. If you take the time to read through all this, congrats, that's dedication.
 
-### 20.4 Post-Launch
+### 26.4 Post-Launch
 - [ ] Battle Pass system
 - [ ] Endless mode
 -  [ ] Daily rewards
 - [ ] Cloud save
--  iving | Reward |
-|---------|--------|
-| Endless mode | 50 gold per 5 min survived |
+- [ ] New heroes, weapons, chapters (seasonal content)
 
 ---
 
-## 21. ECS Component → Template Mapping
+## 27. ECS COMPONENT → TEMPLATE MAPPING
 
 | Component | Template File | Notes |
 |-----------|---------------|-------|
@@ -1473,7 +1470,7 @@ simulate_balance.py — Add survivor.io-style metrics (DPS curves, enemy scaling
 
 ---
 
-## 22. KEY DESIGN DECISIONS & RATIONALE
+## 28. KEY DESIGN DECISIONS & RATIONALE
 
 ### Q: Why add towers to a bullet-heaven game?
 **A**: Pure survivor.io clones are saturated. The tower layer creates strategic depth and differentiates us. It also:
@@ -1490,7 +1487,7 @@ simulate_balance.py — Add survivor.io-style metrics (DPS curves, enemy scaling
 ### Q: Why evolution requires a specific passive?
 **A**: Creates build planning. Player must think: "If I want the Minigun, I need Power Core passive AND Assault Rifle at Level 5." This adds depth beyond "always pick the highest DPS."
 
-###  to the next game."
+### Q: Why do players keep coming back to the next game?
 **A**: The roguelite loop. Each match feels different because:
 - Random upgrade cards (no two builds are identical)
 - Random enemy spawns
@@ -1508,9 +1505,9 @@ simulate_balance.py — Add survivor.io-style metrics (DPS curves, enemy scaling
 
 ---
 
-## 24. DIFFICULTY CURVE SPECIFICATION
+## 29. DIFFICULTY CURVE SPECIFICATION
 
-### Minute-by-Minute Progression (15-Minute Match)
+### 29.1 Minute-by-Minute Progression (15-Minute Match)
 
 #### Early Game (Minutes 0-3)
 - **Goal:** Teach mechanics, low threat
@@ -1718,7 +1715,7 @@ The difficulty curve ensures:
 
 ---
 
-## 25. GLOSSARY
+## 30. GLOSSARY
 
 | Term | Definition |
 |------|------------|
@@ -1736,7 +1733,7 @@ The difficulty curve ensures:
 
 ---
 
-## 24. CHECKPOINT #1 — CONCEPT SIGN-OFF
+## 31. CHECKPOINT #1 — CONCEPT SIGN-OFF
 
 **This is a HARD GATE. No development begins until the user approves this concept.**
 
