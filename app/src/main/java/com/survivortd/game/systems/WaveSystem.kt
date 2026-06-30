@@ -2,6 +2,7 @@ package com.survivortd.game.systems
 
 import com.survivortd.game.components.EnemyComponent
 import com.survivortd.game.config.ChapterConfig
+import com.survivortd.game.config.GameBalance
 import com.survivortd.game.config.GameConfig
 import com.survivortd.game.core.GameState
 import kotlin.math.cos
@@ -24,7 +25,7 @@ class WaveSystem(
     private val chapter: ChapterConfig = ChapterConfig.WASTELAND
 ) {
     private var spawnTimer = 0f
-    private var spawnInterval = 1.5f   // Base spawn interval in seconds
+    private var spawnInterval = GameConfig.BASE_SPAWN_INTERVAL   // [#49] Use config, was hardcoded 1.5f
 
     // Boss tracking
     private val bossesSpawned = mutableSetOf<Int>()
@@ -78,8 +79,10 @@ class WaveSystem(
         spawnTimer += dt
         if (spawnTimer >= spawnInterval) {
             spawnTimer = 0f
-            // Decrease interval over time: max(0.3, 1.5 - minutes * 0.05)
-            spawnInterval = (1.5f - minutes * 0.05f).coerceAtLeast(0.3f)
+            // [#49] Recompute interval from the canonical GameBalance formula
+            // so runtime spawning matches the GDD validation tests exactly.
+            // Was a divergent hardcoded formula (1.5 - min*0.05) ignoring config.
+            spawnInterval = GameBalance.spawnIntervalAtMinute(minutes.toInt())
             spawnEnemy()
         }
     }
