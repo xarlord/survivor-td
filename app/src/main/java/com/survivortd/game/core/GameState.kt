@@ -25,8 +25,18 @@ class GameState {
     val tags = mutableListOf<TagComponent>()
 
     // === NEXT ENTITY ID ===
+    // [#47] Entity IDs ARE array indices — all component lists are parallel.
+    // The next ID is always the current list size (where .add() will place
+    // the new entity). A monotonic counter would diverge after cleanupDeadEntities()
+    // removes entities and shifts indices, causing IndexOutOfBoundsException.
     private var nextId = 0
-    fun nextEntityId(): Int = nextId++
+    fun nextEntityId(): Int {
+        // Use current list size as the ID — this is always the correct index
+        // for the next entity to be added via .add(). All spawn methods add to
+        // every component list (using placeholders), and cleanupDeadEntities()
+        // removes from every list at the same index, keeping them parallel.
+        return positions.size
+    }
 
     // === GAME STATS ===
     var score: Long = 0
@@ -277,6 +287,7 @@ class GameState {
         projectiles.clear()
         pickups.clear()
         towers.clear()
+        statusEffects.clear()  // [#47] was missing — kept arrays out of sync after reset
         tags.clear()
         nextId = 0
         score = 0
