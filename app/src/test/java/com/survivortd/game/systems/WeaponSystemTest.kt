@@ -297,8 +297,10 @@ class WeaponSystemTest {
                 enemyType = EnemyComponent.EnemyData.ZOMBIE
             )
 
-            // Orbital damage + SLOW_ATTACK applied every tick via updateOrbital
-            weaponSys.update(0.5f)
+            // Orbital damage + SLOW_ATTACK applied every tick via updateOrbital.
+            // Use small ticks so the orb sweeps through the enemy's position
+            // (orb orbits at 70px from player; enemy at 60px is within contact radius).
+            repeat(30) { weaponSys.update(0.016f) }
 
             val hasSlowAttack = state.statusEffects[enemyId].effects.any {
                 it.type == com.survivortd.game.config.StatusEffectType.SLOW_ATTACK
