@@ -219,6 +219,21 @@ class TowerSystemTest {
         }
 
         @Test
+        @DisplayName("[#52] Tesla coil STUNs chained enemies (hard CC)")
+        fun teslaStunsEnemies() {
+            state.players[state.playerIndex].scrap = 99999
+            towerSys.placeTower(TowerType.TESLA_COIL, 200f, 200f)
+            val e1 = state.spawnEnemy(x = 250f, y = 200f, enemyType = EnemyComponent.EnemyData.ZOMBIE)
+
+            repeat(60) { towerSys.update(0.016f) }  // ~1s, Tesla fires at 0.7/s
+
+            val hasStun = state.statusEffects[e1].effects.any {
+                it.type == com.survivortd.game.config.StatusEffectType.STUN
+            }
+            assertTrue(hasStun, "[#52] Tesla Coil chain lightning should apply STUN to hit enemies")
+        }
+
+        @Test
         @DisplayName("Tower range increases with level")
         fun rangeIncreasesWithLevel() {
             state.players[state.playerIndex].scrap = 99999

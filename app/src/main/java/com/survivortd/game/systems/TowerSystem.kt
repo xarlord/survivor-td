@@ -231,6 +231,9 @@ class TowerSystem(
             hp.currentHp -= damage * (1f - chain * 0.2f)  // Each chain does 20% less
             if (hp.isDead) tower.totalKills++
 
+            // Tesla Coil chain lightning STUNs hit enemies for 0.5s (GDD §3.3, issue #52)
+            applyStun(currentTarget, 0.5f)
+
             // Find next chain target within 100px
             var nextTarget = -1
             var nearestDistSq = 100f * 100f
@@ -283,6 +286,27 @@ class TowerSystem(
         if (enemyIndex < 0 || enemyIndex >= state.positions.size) return Float.MAX_VALUE
         val pos = state.positions[enemyIndex]
         return hypot(pos.x - tower.x, pos.y - tower.y)
+    }
+
+    /**
+     * Apply a STUN status effect to an enemy (hard CC — zeroes velocity, GDD §3.3).
+     * Issue #52: Tesla Coil chain lightning now STUNs hit enemies.
+     */
+    private fun applyStun(enemyIndex: Int, duration: Float) {
+        if (enemyIndex < 0 || enemyIndex >= state.statusEffects.size) return
+        val se = state.statusEffects[enemyIndex]
+        val existing = se.effects.find { it.type == StatusEffectType.STUN }
+        if (existing != null) {
+            existing.duration = maxOf(existing.duration, duration)
+        } else {
+            se.effects.add(
+                com.survivortd.game.components.StatusEffectsComponent.ActiveStatus(
+                    type = StatusEffectType.STUN,
+                    duration = duration,
+                    magnitude = 1f
+                )
+            )
+        }
     }
 
     /**
