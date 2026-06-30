@@ -59,21 +59,21 @@ class SurvivorTDE2ETest {
 
     @Test
     fun tapping_play_does_not_crash_app() {
-        composeRule.onNodeWithTag("play_button").performClick()
+        clickPlayButton()
         Thread.sleep(3000)
         assertTrue(composeRule.activity.window.decorView.isAttachedToWindow)
     }
 
     @Test
     fun game_survives_5_seconds_without_crash() {
-        composeRule.onNodeWithTag("play_button").performClick()
+        clickPlayButton()
         Thread.sleep(5000)
         assertTrue(composeRule.activity.window.decorView.isAttachedToWindow)
     }
 
     @Test
     fun game_survives_15_seconds_without_crash() {
-        composeRule.onNodeWithTag("play_button").performClick()
+        clickPlayButton()
         Thread.sleep(15000)
         assertTrue(composeRule.activity.window.decorView.isAttachedToWindow)
     }
@@ -83,18 +83,68 @@ class SurvivorTDE2ETest {
     // ================================================================
 
     /**
+     * Clicks the PLAY button without deadlocking on waitForIdle().
+     *
+     * [#46] performClick() internally calls waitForIdle(). Once GameScreen
+     * composes, the game loop's 60Hz onRender callback keeps the main Looper
+     * perpetually non-idle (via Handler.post), causing performClick() to hang.
+     * Disabling mainClock.autoAdvance skips the internal waitForIdle() call.
+     */
+    private fun clickPlayButton() {
+        composeRule.mainClock.autoAdvance = false
+        try {
+            composeRule.onNodeWithTag("play_button").performClick()
+            composeRule.mainClock.advanceTimeBy(1000L)
+        } finally {
+            composeRule.mainClock.autoAdvance = true
+        }
+    }
+
+    /**
      * Helper: Start gameplay and wait for [millis] then return a snapshot.
      * Asserts the bridge is active (game state registered).
      *
      * The game loop runs on Dispatchers.Default (background thread), so it
      * continues running even during Thread.sleep() on the main thread.
+     *
+     * CRITICAL FIX [#46]: performClick() internally calls waitForIdle() to wait
+     * for recomposition. However, once the GameScreen composes, the game loop
+     * fires onRender at ~60Hz via Handler.post(Main), bumping redrawTrigger and
+     * keeping the main Looper perpetually non-idle. This causes performClick()
+     * to deadlock — it never returns because waitForIdle() never completes.
+     *
+     * SOLUTION: Disable mainClock.autoAdvance before the click. This makes the
+     * Compose test framework skip its internal waitForIdle() calls (the clock is
+     * paused, so it doesn't try to advance to idle). The click's onClick lambda
+     * still fires synchronously, setting showGame=true and triggering the first
+     * composition of GameScreen (which registers TestGameBridge in a remember{}
+     * block). We then poll for TestGameBridge.isActive instead of relying on
+     * waitForIdle().
      */
     private fun startGameAndSnapshot(millis: Long): TestGameBridge.GameSnapshot {
-        composeRule.onNodeWithTag("play_button").performClick()
-        Thread.sleep(millis)
-        val snap = TestGameBridge.snapshot()
+        // [#46] Use the deadlock-safe click helper
+        clickPlayButton()
+
+        // Poll for TestGameBridge activation (max 10 seconds).
+        // The GameScreen composes asynchronously; the remember{} block that
+        // registers TestGameBridge runs during composition.
+        val startTime = System.currentTimeMillis()
+        var snap: TestGameBridge.GameSnapshot? = null
+        while (System.currentTimeMillis() - startTime < 10_000) {
+            snap = TestGameBridge.snapshot()
+            if (snap != null) break
+            Thread.sleep(100)
+        }
+
         assertNotNull("TestGameBridge should be active after PLAY (debug build)", snap)
-        return snap!!
+
+        // Wait for requested gameplay time. The game loop runs on
+        // Dispatchers.Default (background thread) and is NOT blocked by
+        // Thread.sleep() on the main thread.
+        Thread.sleep(millis)
+
+        // Return a fresh snapshot after the gameplay duration
+        return TestGameBridge.snapshot()!!
     }
 
     /**
