@@ -1346,8 +1346,7 @@ Balance conclusions from the simulation model:
     "totalPlaytime": 28800,
     "totalGoldEarned": 24000
     ...
-  },
-"
+  }
 }
 ```
 
@@ -1382,7 +1381,7 @@ Balance conclusions from the simulation model:
 ### 26.1 MVP Scope (First Playable — Week 1)
 - [ ] Core game loop: move, auto-attack, kill, XP, level up, choose upgrade
 - [ ] 3 weapons: Assault Rifle, Katana, Lightning Orb
--  [ ] 3 enemy types: Zombie, Runner, Brute
+- [ ] 3 enemy types: Zombie, Runner, Brute
 - [ ] 1 hero: Commander
 - [ ] 1 chapter: Wasteland (15 min)
 - [ ] Leveling system with upgrade cards
@@ -1390,22 +1389,10 @@ Balance conclusions from the simulation model:
 - [ ] Win/lose conditions
 - [ ] Basic SFX + 1 music track
 
-### 20.2 Vertical Slice (Week 2)
-- [ ] All 12 weapons + evolutions
-- [ ] All 12 passive items
--  [ ] All 10 enemy types + boss
-- [ ] Tower system (6 types + upgrades)
-- [ ] 3 heroes
-- [ ] Build phase
-- [ ] Meta-progression (permanent upgrades)
--  [ ] Save system
-- [ ] Full audio
-- [ ] Settings menu
-
 ### 26.2 Vertical Slice (Week 2)
 - [ ] All 12 weapons + evolutions
 - [ ] All 12 passive items
--  [ ] All 10 enemy types + boss
+- [ ] All 10 enemy types + boss
 - [ ] Tower system (6 types + upgrades)
 - [ ] 3 heroes
 - [ ] Build phase
@@ -1418,15 +1405,15 @@ Balance conclusions from the simulation model:
 - [ ] 5 chapters + 5 bosses
 - [ ] All 6 heroes
 - [ ] Monetization (rewarded ads + IAP)
--  [ ] Daily challenges
--  [ ] Analytics
+- [ ] Daily challenges
+- [ ] Analytics
 - [ ] Polishing pass: game feel, particles, screen shake
 - [ ] Performance optimization
 
 ### 26.4 Post-Launch
 - [ ] Battle Pass system
 - [ ] Endless mode
--  [ ] Daily rewards
+- [ ] Daily rewards
 - [ ] Cloud save
 - [ ] New heroes, weapons, chapters (seasonal content)
 
@@ -1438,13 +1425,13 @@ Balance conclusions from the simulation model:
 |-----------|---------------|-------|
 | Position, Velocity | `ecs_components.kt` | Base movement |
 | Sprite | `ecs_components.kt` | Rendering |
-| Health, Damage | `ecs components.kt` | Combat core |
+| Health, Damage | `ecs_components.kt` | Combat core |
 | Enemy + AI | `enemy_ai_system.kt` | ChaseBehavior + ShootBehavior + WaveBehavior |
 | Weapon, Projectile | (NEW) `weapon_system.kt` | Needs new template |
 | Pickup | (NEW) `pickup_system.kt` | Needs new template |
 | Tower | (NEW) `tower_system.kt` | Needs new content |
 | Passive | (NEW) `passive_system.kt` | Needs new content |
-| StatusEffect | (NEW) §`status_effect_system.kt` | Needs new content |
+| StatusEffect | (NEW) `status_effect_system.kt` | Needs new content |
 | PlayerStats | (NEW) `player_stats_component.kt` | Needs new content |
 | Particle | `particle_system.kt` | Reuse existing |
 | CameraFollow | `camera_system.kt`+ | Reuse existing |
@@ -1454,13 +1441,13 @@ Balance conclusions from the simulation model:
 ### New Templates Needed (6)
 1. `weapon_system.kt` — Auto-fire logic, targeting, projectile spawning, evolution tracking
 2. `pickup_system.kt` — XP gem magnet, health pack, bomb, magnet, treasure
-3. `  `tower_system.kt` — Tower placement, targeting, upgrade levels, scrap economy
+3. `tower_system.kt` — Tower placement, targeting, upgrade levels, scrap economy
 4. `passive_system.kt` — Passive item stacking, stat recalculation
 5. `status_effect_system.kt` — Burn/Poison/Freeze/Slow/Stun tick logic
 6. `player_stats_component.kt` — Aggregated stats from base + permanent upgrades + passives
 
 ### Existing Templates Reused (7)
-game_loop.kt, ecs_components.kt, game_canvas_screen.kt, camera_system.kt, enemy_ai_system.kt, particle_system.kt, game_feel system.kt, audio_manager.kt, save_system.kt
+game_loop.kt, ecs_components.kt, game_canvas_screen.kt, camera_system.kt, enemy_ai_system.kt, particle_system.kt, game_feel_system.kt, audio_manager.kt, save_system.kt
 
 ### Existing Scripts Reused (3)
 process_assets.py, synth_audio.py, run_visual_qa.py
@@ -1500,8 +1487,6 @@ simulate_balance.py — Add survivor.io-style metrics (DPS curves, enemy scaling
 
 ### Q: F2P with no energy system?
 **A**: Yes. Energy systems hurt retention in single-player games. Revenue comes from rewarded ads (high-conversion) and IAP for cosmetics/convenience. No pay-to-win.
-
----
 
 ---
 
