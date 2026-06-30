@@ -11,6 +11,7 @@ plugins {
 android {
     namespace = "com.survivortd.game"
     compileSdk = 35
+    buildToolsVersion = "36.0.0"
 
     val keystoreProperties = Properties()
     val keystoreFile = rootProject.file("keystore.properties")
