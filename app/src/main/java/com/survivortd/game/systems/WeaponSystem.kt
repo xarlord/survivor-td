@@ -546,6 +546,10 @@ class WeaponSystem(
                 val dy = pos.y - orbY
                 if (dx * dx + dy * dy <= (orbRadius + 15f) * (orbRadius + 15f)) {
                     dealDamage(i, dmg, orb.type)
+                    // Evolved Thunder Storm: static discharge slows enemy attacks (GDD §3.3, issue #52)
+                    if (orb.isEvolved) {
+                        applyStatus(i, StatusEffectType.SLOW_ATTACK, 2f, 0.35f)
+                    }
                 }
             }
         }

@@ -278,6 +278,33 @@ class WeaponSystemTest {
             val projAfter = countActiveProjectiles()
             assertTrue(projAfter > projBefore)
         }
+
+        @Test
+        @DisplayName("[#52] Evolved Lightning Orb (Thunder Storm) applies SLOW_ATTACK")
+        fun evolvedLightningOrbAppliesSlowAttack() {
+            weaponSys.addWeapon(WeaponType.LIGHTNING_ORB)
+            // Evolve: High-Voltage catalyst + level 5 → 6
+            weaponSys.addPassive(PassiveType.HIGH_VOLTAGE)
+            repeat(4) { weaponSys.upgradeWeapon(WeaponType.LIGHTNING_ORB) }
+            assertTrue(weaponSys.upgradeWeapon(WeaponType.LIGHTNING_ORB), "Should evolve")
+            assertTrue(weaponSys.weapons[0].isEvolved, "Should be evolved Thunder Storm")
+
+            // Spawn enemy within orb contact radius (~70px from player)
+            val playerPos = state.positions[state.playerIndex]
+            val enemyId = state.spawnEnemy(
+                x = playerPos.x + 60f,
+                y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+
+            // Orbital damage + SLOW_ATTACK applied every tick via updateOrbital
+            weaponSys.update(0.5f)
+
+            val hasSlowAttack = state.statusEffects[enemyId].effects.any {
+                it.type == com.survivortd.game.config.StatusEffectType.SLOW_ATTACK
+            }
+            assertTrue(hasSlowAttack, "[#52] Evolved Thunder Storm should apply SLOW_ATTACK")
+        }
     }
 
     @Nested
