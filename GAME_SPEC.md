@@ -262,7 +262,12 @@ Elite Chance = 5% + minutesElapsed * 0.5%
 spawnTimer += dt
 if spawnTimer > spawnInterval:
     spawnTimer = 0
-    spawnInterval = max(0.3, baseInterval - minutesElapsed * 0.05)
+    
+    # Calculate spawn interval using division formula (see Section 29.3)
+    # Formula: baseInterval / (1 + minutesElapsed × ENEMY_SPAWN_RATE_SCALE)
+    # where ENEMY_SPAWN_RATE_SCALE = 0.20 (+20% spawn rate per minute)
+    rateMultiplier = 1 + minutesElapsed * ENEMY_SPAWN_RATE_SCALE
+    spawnInterval = max(MIN_SPAWN_INTERVAL, baseInterval / rateMultiplier)
     
     # Pick enemy type from weighted pool
     pool = getWeightedPool(minutesElapsed)
