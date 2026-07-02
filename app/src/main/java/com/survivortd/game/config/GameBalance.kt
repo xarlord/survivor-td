@@ -260,7 +260,7 @@ object GameBalance {
         )
     }
 
-    /** Enemy HP at a given minute (exponential scaling). */
+    /** Enemy HP at a given minute (linear scaling per GDD §29.1). */
     fun enemyHpAtMinute(baseHp: Float, minute: Int): Float {
         return baseHp * (1f + GameConfig.ENEMY_HP_SCALE * minute)
     }
@@ -272,7 +272,9 @@ object GameBalance {
 
     /** Spawn interval at a given minute. */
     fun spawnIntervalAtMinute(minute: Int): Float {
-        val interval = GameConfig.BASE_SPAWN_INTERVAL * (1f - GameConfig.ENEMY_SPAWN_RATE_SCALE * minute / 10f)
+        // GDD §29.1: Formula is baseInterval / (1 + minutesElapsed × 0.20)
+        // Example: Minute 5 = 1.0 / (1 + 0.20 * 5) = 1.0 / 2.0 = 0.5s
+        val interval = GameConfig.BASE_SPAWN_INTERVAL / (1f + GameConfig.ENEMY_SPAWN_RATE_SCALE * minute)
         return interval.coerceAtLeast(GameConfig.MIN_SPAWN_INTERVAL)
     }
 }
