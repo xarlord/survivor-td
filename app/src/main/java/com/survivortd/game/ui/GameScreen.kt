@@ -97,23 +97,19 @@ fun GameScreen(
     val renderHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     val renderPending = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
 
-    // FPS counter: count renders per second
-    val fpsFrames = remember { java.util.concurrent.atomic.AtomicInteger(0) }
-    val fpsExecutor = remember {
-        java.util.concurrent.Executors.newSingleThreadScheduledExecutor().also { exec ->
-            exec.scheduleAtFixedRate({
-                val frames = fpsFrames.getAndSet(0)
-                renderHandler.post {
-                    hudFps = frames
-                    if (frames > 0) {
-                        android.util.Log.d("SurvivorTD-FPS", "FPS=$frames, tick=${gameState.currentTick}")
-                    }
-                }
-            }, 1000, 1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+    // FPS counter: count actual Canvas redraws per second via redrawTrigger changes.
+    // We sample every second from the main coroutine — avoids off-thread complexity.
+    LaunchedEffect(Unit) {
+        var prevTrigger = 0
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            val current = redrawTrigger
+            hudFps = (current - prevTrigger).coerceAtLeast(0)
+            prevTrigger = current
+            if (hudFps > 0) {
+                android.util.Log.d("SurvivorTD-FPS", "FPS=$hudFps")
+            }
         }
-    }
-    DisposableEffect(Unit) {
-        onDispose { fpsExecutor.shutdown() }
     }
 
     // Joystick visual state — triggers redraw at ~60Hz
@@ -188,7 +184,6 @@ fun GameScreen(
                 // [#23] Trigger Canvas redraw by bumping state on Main thread.
                 // Guard with AtomicBoolean to prevent flooding Main thread —
                 // only one render callback queued at a time.
-                fpsFrames.incrementAndGet()
                 if (renderPending.compareAndSet(false, true)) {
                     renderHandler.post {
                         renderPending.set(false)
