@@ -86,6 +86,15 @@ object GameConfig {
     const val GOLD_CHEST_MAX = 200
     const val GOLD_COMPLETION_BONUS = 200
 
+    // === SPECIAL PICKUPS ===
+    const val MAGNET_PICKUP_RANGE = 500f
+    const val MAGNET_DURATION = 5f
+    const val BOMB_DAMAGE = 200f
+    const val MAGNET_DROP_CHANCE = 0.02f
+    const val BOMB_DROP_CHANCE = 0.01f
+    const val TREASURE_CHEST_DROP_CHANCE = 0.005f
+    const val DASH_DOUBLE_TAP_MS = 300L
+
     // === CAMERA ===
     const val CAMERA_WIDTH = 720f
     const val CAMERA_HEIGHT = 1280f

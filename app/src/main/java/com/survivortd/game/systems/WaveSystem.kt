@@ -175,6 +175,7 @@ class WaveSystem(
         state.wavePauseTimer = GameConfig.WAVE_PAUSE_SECONDS
         state.waveAnnouncementText = "GET READY"
         state.waveAnnouncementTimer = GameConfig.WAVE_PAUSE_SECONDS
+        state.score += 50
     }
 
     /**
