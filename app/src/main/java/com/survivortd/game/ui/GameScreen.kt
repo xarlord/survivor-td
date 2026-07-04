@@ -2,7 +2,6 @@ package com.survivortd.game.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -125,11 +124,15 @@ fun GameScreen(
     var levelUpChoices by remember { mutableStateOf<List<UpgradeChoice>>(emptyList()) }
 
     // Create ALL game systems
+    val particleSystem = remember { com.survivortd.game.systems.ParticleSystem(gameState) }
+    val gameFeelSystem = remember { com.survivortd.game.systems.GameFeelSystem() }
     val movementSystem = remember { com.survivortd.game.systems.MovementSystem(gameState) }
-    val combatSystem = remember { com.survivortd.game.systems.CombatSystem(gameState) }
+    val combatSystem = remember { com.survivortd.game.systems.CombatSystem(gameState, gameFeelSystem) }
     val enemyAiSystem = remember { com.survivortd.game.systems.EnemyAISystem(gameState) }
-    val pickupSystem = remember { com.survivortd.game.systems.PickupSystem(gameState) }
-    val projectileSystem = remember { com.survivortd.game.systems.ProjectileSystem(gameState) }
+    val pickupSystem = remember { com.survivortd.game.systems.PickupSystem(gameState, particleSystem) }
+    val projectileSystem = remember {
+        com.survivortd.game.systems.ProjectileSystem(gameState, particleSystem, gameFeelSystem)
+    }
     // [#21] WaveSystem — spawns enemies continuously. Was completely missing.
     val waveSystem = remember { com.survivortd.game.systems.WaveSystem(gameState) }
     // [#22] TowerSystem — manages placed towers. Was completely missing.
@@ -165,19 +168,25 @@ fun GameScreen(
         GameLoop(
             onUpdate = { dt ->
                 if (gameState.isPaused || gameState.isGameOver) return@GameLoop
+                // Game feel first — returns effective dt (0 during hit-stop)
+                val effectiveDt = gameFeelSystem.update(dt)
+                if (effectiveDt <= 0f) return@GameLoop  // Hit-stop freeze
+
                 // [#21] Wave system FIRST — spawns enemies for other systems to process
-                waveSystem.update(dt)
+                waveSystem.update(effectiveDt)
                 // System update order: AI → Movement → Status → Combat → Towers → Weapons → Projectiles → Pickups
-                enemyAiSystem.update(dt)
-                movementSystem.update(dt)
-                statusEffectSystem.update(dt)
-                combatSystem.update(dt)
+                enemyAiSystem.update(effectiveDt)
+                movementSystem.update(effectiveDt)
+                statusEffectSystem.update(effectiveDt)
+                combatSystem.update(effectiveDt)
                 // [#22] Tower system — auto-targets and fires at enemies
-                towerSystem.update(dt)
-                weaponSystem.update(dt)
-                projectileSystem.update(dt)
-                pickupSystem.update(dt)
-                gameState.elapsedSeconds += dt
+                towerSystem.update(effectiveDt)
+                weaponSystem.update(effectiveDt)
+                projectileSystem.update(effectiveDt)
+                pickupSystem.update(effectiveDt)
+                // Particles always update (even during hit-stop for visual continuity)
+                particleSystem.update(dt)
+                gameState.elapsedSeconds += effectiveDt
                 gameState.cleanupDeadEntities()
             },
             onRender = {
@@ -216,6 +225,8 @@ fun GameScreen(
         // === LAYER 1: Game Canvas + Touch Input ===
         GameCanvasView(
             gameState = gameState,
+            particleSystem = particleSystem,
+            gameFeelSystem = gameFeelSystem,
             joystick = joystick,
             joystickActive = joystickActive,
             joystickAnchor = joystickAnchor,
@@ -293,6 +304,8 @@ fun GameScreen(
 @Composable
 private fun GameCanvasView(
     gameState: GameState,
+    particleSystem: com.survivortd.game.systems.ParticleSystem,
+    gameFeelSystem: com.survivortd.game.systems.GameFeelSystem,
     joystick: VirtualJoystick,
     joystickActive: Boolean,
     joystickAnchor: Offset,
@@ -341,9 +354,9 @@ private fun GameCanvasView(
     ) {
         // Viewport: scale world to fill full screen height, center on player
         val scale = size.height / GameConfig.WORLD_HEIGHT
-        // Camera offset: center the player on screen
-        val camX = gameState.cameraX * scale - size.width / 2f
-        val camY = gameState.cameraY * scale - size.height / 2f
+        // Camera offset: center the player on screen + screen shake
+        val camX = gameState.cameraX * scale - size.width / 2f + gameFeelSystem.shakeOffsetX * scale
+        val camY = gameState.cameraY * scale - size.height / 2f + gameFeelSystem.shakeOffsetY * scale
 
         withTransform({
             translate(left = camX, top = camY)
@@ -351,6 +364,14 @@ private fun GameCanvasView(
         }) {
             drawGameBackground()
             drawEntities(gameState)
+            drawParticles(particleSystem)
+        }
+
+        // Damage flash overlay (screen-space, not world-space)
+        if (gameFeelSystem.damageFlash > 0f) {
+            drawRect(
+                color = Color.Red.copy(alpha = gameFeelSystem.damageFlash * 0.3f)
+            )
         }
         if (joystickActive) {
             drawJoystick(joystickAnchor, joystickKnob)
@@ -429,6 +450,25 @@ private fun DrawScope.drawEntities(state: GameState) {
                 drawPath(diaPath, color = Color(colorInt.toLong()))
             }
         }
+    }
+}
+
+/**
+ * Draws all active particles from the particle system.
+ * Particles fade out based on remaining lifetime.
+ */
+private fun DrawScope.drawParticles(
+    particleSystem: com.survivortd.game.systems.ParticleSystem
+) {
+    val particles = particleSystem.particles
+    for (i in particles.indices) {
+        val p = particles[i]
+        val alpha = (p.life / p.maxLife).coerceIn(0f, 1f)
+        drawCircle(
+            color = Color(p.color.toLong()).copy(alpha = alpha),
+            radius = p.size * alpha, // Shrink as they fade
+            center = Offset(p.x, p.y)
+        )
     }
 }
 

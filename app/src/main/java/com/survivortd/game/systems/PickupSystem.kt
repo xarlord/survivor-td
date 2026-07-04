@@ -17,7 +17,8 @@ import kotlin.math.sqrt
  * When gems touch the player, XP/gold/heal is applied.
  */
 class PickupSystem(
-    private val state: GameState
+    private val state: GameState,
+    private val particleSystem: ParticleSystem? = null
 ) {
     /**
      * Process pickups for this tick.
@@ -50,12 +51,15 @@ class PickupSystem(
             if (!health.isDead) continue
 
             // Spawn gem at enemy position
-            if (i < state.positions.size) {
-                val pos = state.positions[i]
-                val enemyType = if (i < state.enemies.size) state.enemies[i].type
-                    else EnemyComponent.EnemyData.ZOMBIE
+                if (i < state.positions.size) {
+                    val pos = state.positions[i]
+                    val enemyType = if (i < state.enemies.size) state.enemies[i].type
+                        else EnemyComponent.EnemyData.ZOMBIE
 
-                spawnXpGem(pos.x, pos.y, enemyType)
+                    // VFX: enemy death burst particles
+                    particleSystem?.onEnemyDeath(pos.x, pos.y)
+
+                    spawnXpGem(pos.x, pos.y, enemyType)
             }
         }
     }
@@ -166,6 +170,8 @@ class PickupSystem(
                         player.xpToNext = GameConfig.xpForLevel(player.level)
                         state.pendingLevelUps++
                     }
+                    // VFX: gem sparkle on XP pickup
+                    particleSystem?.onGemPickup(pos.x, pos.y)
                 }
                 // Apply gold
                 if (pickup.goldValue > 0) {
@@ -180,6 +186,8 @@ class PickupSystem(
                 if (pickup.healAmount > 0f && state.playerIndex < state.healths.size) {
                     val health = state.healths[state.playerIndex]
                     health.currentHp = (health.currentHp + pickup.healAmount).coerceAtMost(health.maxHp)
+                    // VFX: heal sparkle
+                    particleSystem?.onHeal(pos.x, pos.y)
                 }
                 // Mark for removal
                 pickup.xpValue = 0

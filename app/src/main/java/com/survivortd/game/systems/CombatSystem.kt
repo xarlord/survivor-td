@@ -12,7 +12,8 @@ import kotlin.math.sqrt
  * Called every physics tick after movement.
  */
 class CombatSystem(
-    private val state: GameState
+    private val state: GameState,
+    private val gameFeelSystem: GameFeelSystem? = null
 ) {
     /**
      * Process combat for this tick.
@@ -95,6 +96,9 @@ class CombatSystem(
                 health.currentHp -= mitigatedDamage
                 health.invincible = true
                 health.invincibleTimer = INVINCIBILITY_FRAMES_SECONDS
+
+                // VFX: player hit screen shake + damage flash
+                gameFeelSystem?.onPlayerHit()
 
                 // Knockback player away from enemy
                 val dist = sqrt(distSq.coerceAtLeast(0.01f))

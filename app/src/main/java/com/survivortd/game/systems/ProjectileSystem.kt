@@ -11,7 +11,9 @@ import kotlin.math.sqrt
  * pierce counting, AoE explosions, boomerang return, mine detonation.
  */
 class ProjectileSystem(
-    private val state: GameState
+    private val state: GameState,
+    private val particleSystem: ParticleSystem? = null,
+    private val gameFeelSystem: GameFeelSystem? = null
 ) {
     private val playerStartX = 0f  // Set on first boomerang update
     private val playerStartY = 0f
@@ -134,9 +136,16 @@ class ProjectileSystem(
                     applyStatusEffect(j, statusType, proj.onHitEffectDuration, proj.onHitEffectMagnitude)
                 }
 
+                // VFX: hit spark particles + light screen shake
+                particleSystem?.onHit(checkX, checkY)
+                gameFeelSystem?.onLightHit()
+
                 // AoE explosion
                 if (proj.aoeRadius > 0f) {
                     explodeAoE(checkX, checkY, proj.aoeRadius, proj.damage, j)
+                    // VFX: explosion particles + heavy shake + hit-stop
+                    particleSystem?.onExplosion(checkX, checkY)
+                    gameFeelSystem?.onExplosion()
                     // AoE projectiles die on first hit
                     state.healths[projIndex].currentHp = 0f
                     return
@@ -179,6 +188,9 @@ class ProjectileSystem(
             if (dx * dx + dy * dy <= triggerRadius * triggerRadius) {
                 // Detonate!
                 explodeAoE(minePos.x, minePos.y, proj.aoeRadius, proj.damage, j)
+                // VFX: explosion at mine position
+                particleSystem?.onExplosion(minePos.x, minePos.y)
+                gameFeelSystem?.onHeavyHit()
                 return true
             }
         }
