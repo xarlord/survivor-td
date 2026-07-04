@@ -59,6 +59,9 @@ class PickupSystem(
                     // VFX: enemy death burst particles
                     particleSystem?.onEnemyDeath(pos.x, pos.y)
 
+                    // [#113] SFX: enemy death
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.ENEMY_DEATH)
+
                     spawnXpGem(pos.x, pos.y, enemyType)
             }
         }
@@ -212,11 +215,15 @@ class PickupSystem(
                     }
                     // VFX: gem sparkle on XP pickup
                     particleSystem?.onGemPickup(pos.x, pos.y)
+                    // [#113] SFX: gem collect
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.GEM_COLLECT)
                 }
                 // Apply gold
                 if (pickup.goldValue > 0) {
                     player.gold += pickup.goldValue
                     state.goldCollected += pickup.goldValue
+                    // [#113] SFX: coin clink
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.COIN_CLINK)
                 }
                 // Apply scrap
                 if (pickup.scrapValue > 0) {
@@ -228,6 +235,8 @@ class PickupSystem(
                     health.currentHp = (health.currentHp + pickup.healAmount).coerceAtMost(health.maxHp)
                     // VFX: heal sparkle
                     particleSystem?.onHeal(pos.x, pos.y)
+                    // [#113] SFX: heal
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.HEAL)
                 }
                 // Mark for removal
                 pickup.xpValue = 0
