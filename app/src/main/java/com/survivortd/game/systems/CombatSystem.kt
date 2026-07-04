@@ -1,5 +1,6 @@
 package com.survivortd.game.systems
 
+import com.survivortd.game.components.DamageNumberComponent
 import com.survivortd.game.components.EnemyComponent
 import com.survivortd.game.components.TagComponent
 import com.survivortd.game.config.GameConfig
@@ -15,7 +16,8 @@ import kotlin.math.sqrt
  */
 class CombatSystem(
     private val state: GameState,
-    private val gameFeelSystem: GameFeelSystem? = null
+    private val gameFeelSystem: GameFeelSystem? = null,
+    private val meta: MetaProgression? = null
 ) {
     /**
      * Process combat for this tick.
@@ -99,6 +101,16 @@ class CombatSystem(
                 health.invincible = true
                 health.invincibleTimer = INVINCIBILITY_FRAMES_SECONDS
 
+                // [#114] VFX: damage number on player
+                val playerPos = state.positions[state.playerIndex]
+                state.damageNumbers.add(DamageNumberComponent(
+                    x = playerPos.x, y = playerPos.y - 10f,
+                    value = mitigatedDamage
+                ))
+                if (state.playerIndex < state.renders.size) {
+                    state.renders[state.playerIndex].hitFlashTimer = 0.1f
+                }
+
                 // VFX: player hit screen shake + damage flash
                 gameFeelSystem?.onPlayerHit()
                 // [#113] SFX: player hit
@@ -113,7 +125,18 @@ class CombatSystem(
                 state.healthPercent = health.hpPercent
 
                 if (health.isDead) {
-                    state.isGameOver = true
+                    // Check for extra lives from MetaProgression
+                    val player = state.players.getOrNull(state.playerIndex)
+                    if (meta != null && meta.extraLifeLevel > 0 && player != null && !player.hasRevived) {
+                        meta.extraLifeLevel--
+                        health.currentHp = health.maxHp * 0.5f
+                        player.hasRevived = true
+                        health.invincible = true
+                        health.invincibleTimer = 2f
+                    } else {
+                        health.currentHp = 0f
+                        state.isGameOver = true
+                    }
                 }
                 break // Only one enemy hits per tick
             }

@@ -1,5 +1,6 @@
 package com.survivortd.game.systems
 
+import com.survivortd.game.components.DamageNumberComponent
 import com.survivortd.game.components.EnemyComponent
 import com.survivortd.game.components.ProjectileComponent
 import com.survivortd.game.components.TagComponent
@@ -251,6 +252,11 @@ class ProjectileSystem(
         val finalDamage = if (crit) damage * 2f else damage
 
         health.currentHp -= finalDamage
+
+        // [#114] VFX: damage number + hit flash
+        val enemyPos = state.positions[enemyIndex]
+        state.damageNumbers.add(DamageNumberComponent(x = enemyPos.x, y = enemyPos.y - 10f, value = finalDamage, isCrit = crit))
+        if (enemyIndex < state.renders.size) { state.renders[enemyIndex].hitFlashTimer = 0.1f }
     }
 
     /**
@@ -265,6 +271,9 @@ class ProjectileSystem(
         // Armor (#108: flat subtraction per GDD §3.2)
         dmg = GameConfig.armorReduction(dmg, health.armor)
         health.currentHp -= dmg
+        val ePos = state.positions[enemyIndex]
+        state.damageNumbers.add(DamageNumberComponent(x = ePos.x, y = ePos.y - 10f, value = dmg))
+        if (enemyIndex < state.renders.size) { state.renders[enemyIndex].hitFlashTimer = 0.1f }
     }
 
     /**

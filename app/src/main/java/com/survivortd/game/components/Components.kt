@@ -1,6 +1,7 @@
 package com.survivortd.game.components
 
 import com.survivortd.game.config.StatusEffectType
+import kotlin.random.Random
 
 /**
  * Position component — where an entity is in the world.
@@ -25,7 +26,8 @@ data class VelocityComponent(
 data class RenderComponent(
     var radius: Float = 10f,
     var color: Int = 0xFFFFFFFF.toInt(),
-    var shape: RenderShape = RenderShape.CIRCLE
+    var shape: RenderShape = RenderShape.CIRCLE,
+    var hitFlashTimer: Float = 0f
 ) {
     enum class RenderShape { CIRCLE, RECT, TRIANGLE, DIAMOND, CROSS }
 }
@@ -39,9 +41,11 @@ data class HealthComponent(
     var armor: Float = 0f,
     var dodge: Float = 0f,
     var invincible: Boolean = false,
-    var invincibleTimer: Float = 0f
+    var invincibleTimer: Float = 0f,
+    var deathTimer: Float = 0f
 ) {
     val isDead: Boolean get() = currentHp <= 0f
+    val isDying: Boolean get() = deathTimer > 0f
     val hpPercent: Float get() = if (maxHp > 0) (currentHp / maxHp).coerceIn(0f, 1f) else 0f
 }
 
@@ -150,7 +154,10 @@ data class PlayerComponent(
     var moveSpeed: Float = 220f,
     var dashTimer: Float = 0f,
     var dashCooldown: Float = 3f,
-    var isDashing: Boolean = false
+    var dashCooldownTimer: Float = 0f,
+    var isDashing: Boolean = false,
+    var hasRevived: Boolean = false,
+    var magnetTimer: Float = 0f
 )
 
 /**
@@ -164,4 +171,19 @@ data class TowerComponent(
     var totalKills: Int = 0
 ) {
     enum class TowerData { GUN_TURRET, CANNON, FROST_TOWER, TESLA_COIL, POISON_TOWER, ROCKET_POD }
+}
+
+data class DamageNumberComponent(
+    var x: Float = 0f,
+    var y: Float = 0f,
+    var value: Float = 0f,
+    var isCrit: Boolean = false,
+    var elementColor: Int = 0xFFFFFFFF.toInt(),
+    var lifetime: Float = 0.6f,
+    var elapsed: Float = 0f,
+    val vx: Float = (Random.nextFloat() - 0.5f) * 20f,
+    val vy: Float = -60f
+) {
+    val alpha: Float get() = (1f - elapsed / lifetime).coerceIn(0f, 1f)
+    val fontSize: Float get() = if (isCrit) 24f else 16f
 }

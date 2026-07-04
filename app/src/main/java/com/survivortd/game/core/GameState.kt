@@ -23,6 +23,7 @@ class GameState {
     val towers = ArrayList<TowerComponent>(GameConfig.MAX_ENTITIES)
     val statusEffects = ArrayList<StatusEffectsComponent>(GameConfig.MAX_ENTITIES)
     val tags = ArrayList<TagComponent>(GameConfig.MAX_ENTITIES)
+    val damageNumbers = ArrayList<com.survivortd.game.components.DamageNumberComponent>(200)
 
     // === NEXT ENTITY ID ===
     // [#47] Entity IDs ARE array indices — all component lists are parallel.
@@ -342,6 +343,7 @@ class GameState {
         towers.clear()
         statusEffects.clear()  // [#47] was missing — kept arrays out of sync after reset
         tags.clear()
+        damageNumbers.clear()
         nextId = 0
         score = 0
         goldCollected = 0
