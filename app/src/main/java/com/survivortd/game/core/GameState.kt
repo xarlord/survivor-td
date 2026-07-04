@@ -41,11 +41,13 @@ class GameState {
     // === GAME STATS ===
     var score: Long = 0
     var goldCollected: Int = 0
+    var totalKills: Int = 0
     var currentTick: Long = 0
     var elapsedSeconds: Float = 0f
     var healthPercent: Float = 1f
     var lives: Int = 1
     var isGameOver: Boolean = false
+    var gameOverHandled: Boolean = false
     var isPaused: Boolean = false
     var isVictory: Boolean = false
 
@@ -285,6 +287,10 @@ class GameState {
         var i = healths.size - 1
         while (i >= 0) {
             if (i < healths.size && healths[i].isDead) {
+                // Track enemy kills
+                if (i < tags.size && tags[i].tag == TagComponent.EntityTag.ENEMY) {
+                    totalKills++
+                }
                 positions.removeAt(i)
                 if (i < velocities.size) velocities.removeAt(i)
                 if (i < renders.size) renders.removeAt(i)
@@ -319,10 +325,12 @@ class GameState {
         nextId = 0
         score = 0
         goldCollected = 0
+        totalKills = 0
         currentTick = 0
         elapsedSeconds = 0f
         healthPercent = 1f
         isGameOver = false
+        gameOverHandled = false
         isPaused = false
         isVictory = false
         pendingLevelUps = 0
