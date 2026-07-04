@@ -198,4 +198,84 @@ data class MetaProgression(
         chaptersUnlocked = chaptersUnlocked + chapterId
         return true
     }
+
+    /**
+     * Shop display item — maps an upgrade to its UI representation.
+     */
+    enum class UpgradeItem(
+        val displayName: String,
+        val description: String,
+        val baseCost: Int,
+        val maxLevel: Int,
+        val levelGetter: (MetaProgression) -> Int
+    ) {
+        MAX_HP(
+            "Vitality",
+            "+20 Max HP per level",
+            500, MAX_HP_MAX, { it.maxHpLevel }
+        ),
+        MOVE_SPEED(
+            "Agility",
+            "+10 px/s per level",
+            500, SPEED_MAX, { it.moveSpeedLevel }
+        ),
+        DAMAGE(
+            "Power",
+            "+5% damage per level",
+            800, DAMAGE_MAX, { it.damageLevel }
+        ),
+        PICKUP_RANGE(
+            "Magnetism",
+            "+10px pickup range per level",
+            400, PICKUP_MAX, { it.pickupRangeLevel }
+        ),
+        EXTRA_LIFE(
+            "Revival",
+            "+1 revive per level",
+            5000, LIFE_MAX, { it.extraLifeLevel }
+        ),
+        XP_GAIN(
+            "Wisdom",
+            "+5% XP per level",
+            600, XP_MAX, { it.xpGainLevel }
+        ),
+        GOLD_FIND(
+            "Fortune",
+            "+10% gold per level",
+            1000, GOLD_MAX, { it.goldFindLevel }
+        ),
+        TOWER_DISCOUNT(
+            "Bargain",
+            "-10% tower cost per level",
+            2000, TOWER_MAX, { it.towerDiscountLevel }
+        ),
+        STARTING_WEAPON(
+            "Head Start",
+            "Start with weapon at Lv.2",
+            3000, WEAPON_MAX, { it.startingWeaponLevel }
+        );
+
+        fun currentLevel(meta: MetaProgression): Int = levelGetter(meta)
+
+        fun isMaxed(meta: MetaProgression): Boolean = currentLevel(meta) >= maxLevel
+
+        fun cost(meta: MetaProgression): Int = upgradeCost(baseCost, currentLevel(meta))
+    }
+
+    /**
+     * Generic buy method for any UpgradeItem.
+     */
+    fun buy(item: UpgradeItem): Boolean {
+        return when (item) {
+            UpgradeItem.MAX_HP -> buyMaxHp()
+            UpgradeItem.MOVE_SPEED -> buyMoveSpeed()
+            UpgradeItem.DAMAGE -> buyDamage()
+            UpgradeItem.PICKUP_RANGE -> buyPickupRange()
+            UpgradeItem.EXTRA_LIFE -> buyExtraLife()
+            UpgradeItem.XP_GAIN -> buyXpGain()
+            UpgradeItem.GOLD_FIND -> buyGoldFind()
+            UpgradeItem.TOWER_DISCOUNT -> buyTowerDiscount()
+            UpgradeItem.STARTING_WEAPON -> buyStartingWeapon()
+        }
+    }
 }
