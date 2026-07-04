@@ -364,7 +364,7 @@ private fun GameCanvasView(
             translate(left = camX, top = camY)
             scale(scale, scale)
         }) {
-            drawGameBackground()
+            drawGameBackground(gameState)
             drawEntities(gameState)
             drawParticles(particleSystem)
             drawTowers(towerSystem)
@@ -383,20 +383,52 @@ private fun GameCanvasView(
     }
 }
 
-private fun DrawScope.drawGameBackground() {
-    drawRect(color = Color(0xFF0F1320))
+/**
+ * Draws the game background with parallax grid layers and theme-based colors.
+ * Background changes based on elapsed game time (5 chapters).
+ */
+private fun DrawScope.drawGameBackground(state: GameState) {
+    // Theme based on game time — 5 chapters across 15 minutes
+    val minute = state.elapsedSeconds / 60f
+    val (baseColor, gridColor, _) = when {
+        minute < 3f -> Triple(0xFF1A150F, 0xFF2A2018, "Wasteland")
+        minute < 6f -> Triple(0xFF0F1A0F, 0xFF182A18, "Toxic Swamp")
+        minute < 9f -> Triple(0xFF0F0F1A, 0xFF18182A, "Abandoned City")
+        minute < 12f -> Triple(0xFF0F0F1A, 0xFF1A1A28, "Underground Lab")
+        else -> Triple(0xFF1A0F0F, 0xFF2A1818, "Final Bunker")
+    }
 
-    // Grid lines for movement reference
-    val gridColor = Color(0xFF1A1F33)
-    val gridSize = 80f
-    var x = 0f
-    while (x < size.width) {
-        drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+    drawRect(color = Color(baseColor))
+
+    // Parallax grid: 3 layers at different scroll speeds relative to camera
+    val scale = size.height / GameConfig.WORLD_HEIGHT
+    val camX = state.cameraX * scale - size.width / 2f
+    val camY = state.cameraY * scale - size.height / 2f
+
+    // Layer 0 (distant): large features, slowest scroll (0.2x camera)
+    drawParallaxGrid(camX * 0.2f, camY * 0.2f, 200f, Color(0xFF1A1F22).copy(alpha = 0.4f))
+
+    // Layer 1 (mid): medium detail (0.5x camera)
+    drawParallaxGrid(camX * 0.5f, camY * 0.5f, 120f, Color(gridColor.toLong()).copy(alpha = 0.5f))
+
+    // Layer 2 (foreground): current grid, 1:1 with camera
+    drawParallaxGrid(camX, camY, 80f, Color(gridColor.toLong()).copy(alpha = 0.7f))
+}
+
+/**
+ * Draws a parallax grid layer offset by camera position.
+ */
+private fun DrawScope.drawParallaxGrid(offsetX: Float, offsetY: Float, gridSize: Float, color: Color) {
+    val startX = -offsetX % gridSize - gridSize
+    val startY = -offsetY % gridSize - gridSize
+    var x = startX
+    while (x < size.width + gridSize) {
+        drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
         x += gridSize
     }
-    var y = 0f
-    while (y < size.height) {
-        drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+    var y = startY
+    while (y < size.height + gridSize) {
+        drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
         y += gridSize
     }
 }
@@ -409,6 +441,8 @@ private fun DrawScope.drawEntities(state: GameState) {
     val positions = state.positions
     val healths = state.healths
     val renders = state.renders
+    val tags = state.tags
+    val statusEffects = state.statusEffects
     val triPath = androidx.compose.ui.graphics.Path()
     val diaPath = androidx.compose.ui.graphics.Path()
 
@@ -420,6 +454,14 @@ private fun DrawScope.drawEntities(state: GameState) {
         val render = renders[i]
         val colorInt = render.color
         val radius = render.radius
+        val center = Offset(pos.x, pos.y)
+
+        // [#85] Draw status effect glow behind enemies
+        if (i < tags.size && tags[i].tag == com.survivortd.game.components.TagComponent.EntityTag.ENEMY
+            && i < statusEffects.size && statusEffects[i].effects.isNotEmpty()
+        ) {
+            drawStatusEffectGlow(center, radius, statusEffects[i].effects)
+        }
 
         when (render.shape) {
             RenderComponent.RenderShape.CIRCLE -> {
@@ -454,6 +496,39 @@ private fun DrawScope.drawEntities(state: GameState) {
                 drawPath(diaPath, color = Color(colorInt.toLong()))
             }
         }
+    }
+}
+
+/**
+ * Draws a glow outline behind enemies with active status effects.
+ * Dominant effect gets the full glow; secondary effects get a thinner ring.
+ */
+private fun DrawScope.drawStatusEffectGlow(
+    center: Offset,
+    radius: Float,
+    effects: List<com.survivortd.game.components.StatusEffectsComponent.ActiveStatus>
+) {
+    val colorMap = mapOf(
+        com.survivortd.game.config.StatusEffectType.BURN to 0xFFFF1744.toInt(),
+        com.survivortd.game.config.StatusEffectType.POISON to 0xFF76FF03.toInt(),
+        com.survivortd.game.config.StatusEffectType.FREEZE to 0xFF81D4FA.toInt(),
+        com.survivortd.game.config.StatusEffectType.STUN to 0xFFFFFF00.toInt(),
+        com.survivortd.game.config.StatusEffectType.SLOW to 0xFFCE93D8.toInt(),
+        com.survivortd.game.config.StatusEffectType.BLEED to 0xFFFF1744.toInt(),
+        com.survivortd.game.config.StatusEffectType.SLOW_ATTACK to 0xFFCE93D8.toInt()
+    )
+
+    val sorted = effects.sortedByDescending { it.duration }
+    for ((ringIndex, effect) in sorted.withIndex()) {
+        if (ringIndex >= 2) break
+        val colorInt = colorMap[effect.type] ?: continue
+        val glowRadius = radius + 4f + ringIndex * 3f
+        val alpha = if (ringIndex == 0) 0.5f else 0.3f
+        drawCircle(
+            color = Color(colorInt.toLong()).copy(alpha = alpha),
+            radius = glowRadius,
+            center = center
+        )
     }
 }
 
