@@ -227,6 +227,7 @@ fun GameScreen(
             gameState = gameState,
             particleSystem = particleSystem,
             gameFeelSystem = gameFeelSystem,
+            towerSystem = towerSystem,
             joystick = joystick,
             joystickActive = joystickActive,
             joystickAnchor = joystickAnchor,
@@ -306,6 +307,7 @@ private fun GameCanvasView(
     gameState: GameState,
     particleSystem: com.survivortd.game.systems.ParticleSystem,
     gameFeelSystem: com.survivortd.game.systems.GameFeelSystem,
+    towerSystem: com.survivortd.game.systems.TowerSystem,
     joystick: VirtualJoystick,
     joystickActive: Boolean,
     joystickAnchor: Offset,
@@ -365,6 +367,8 @@ private fun GameCanvasView(
             drawGameBackground()
             drawEntities(gameState)
             drawParticles(particleSystem)
+            drawTowers(towerSystem)
+            drawPlayerGlow(gameState)
         }
 
         // Damage flash overlay (screen-space, not world-space)
@@ -470,6 +474,63 @@ private fun DrawScope.drawParticles(
             center = Offset(p.x, p.y)
         )
     }
+}
+
+/**
+ * Draws placed towers from TowerSystem's local list.
+ * Each tower type has a unique color and shape.
+ */
+private fun DrawScope.drawTowers(
+    towerSystem: com.survivortd.game.systems.TowerSystem
+) {
+    for (tower in towerSystem.towers) {
+        val color = when (tower.type) {
+            com.survivortd.game.config.TowerType.GUN_TURRET -> Color(0xFF42A5F5)
+            com.survivortd.game.config.TowerType.CANNON -> Color(0xFFFF6F00)
+            com.survivortd.game.config.TowerType.FROST_TOWER -> Color(0xFF00FFFF)
+            com.survivortd.game.config.TowerType.TESLA_COIL -> Color(0xFFFFF700)
+            com.survivortd.game.config.TowerType.POISON_TOWER -> Color(0xFF76FF03)
+            com.survivortd.game.config.TowerType.ROCKET_POD -> Color(0xFFFF4500)
+        }
+        val center = Offset(tower.x, tower.y)
+        // Base platform (dark circle)
+        drawCircle(color = Color(0xFF1A1F33), radius = 22f, center = center)
+        // Tower body
+        drawCircle(color = color, radius = 14f, center = center)
+        // Level indicator (small ring)
+        if (tower.level >= 2) {
+            drawCircle(
+                color = color,
+                radius = 18f,
+                center = center,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
+            )
+        }
+        if (tower.level >= 3) {
+            drawCircle(
+                color = Color.White.copy(alpha = 0.4f),
+                radius = 22f,
+                center = center,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
+            )
+        }
+    }
+}
+
+/**
+ * Draws a pulsing glow around the player for visibility.
+ * Pulse rate ~2Hz based on elapsed seconds.
+ */
+private fun DrawScope.drawPlayerGlow(state: GameState) {
+    if (state.playerIndex < 0) return
+    val pos = state.positions[state.playerIndex]
+    val pulse = (kotlin.math.sin(state.elapsedSeconds * 4f) + 1f) * 0.5f // 0..1
+    val glowRadius = 24f + pulse * 6f
+    drawCircle(
+        color = Color(0xFF00E676).copy(alpha = 0.15f + pulse * 0.1f),
+        radius = glowRadius,
+        center = Offset(pos.x, pos.y)
+    )
 }
 
 /**

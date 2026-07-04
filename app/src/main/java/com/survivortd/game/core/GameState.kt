@@ -143,7 +143,18 @@ class GameState {
         positions.add(PositionComponent(x = x, y = y))
         velocities.add(VelocityComponent(maxSpeed = 80f))
         renders.add(RenderComponent(
-            radius = 12f,
+            radius = when (enemyType) {
+                EnemyComponent.EnemyData.ZOMBIE -> 12f
+                EnemyComponent.EnemyData.RUNNER -> 8f
+                EnemyComponent.EnemyData.BRUTE -> 22f
+                EnemyComponent.EnemyData.SPITTER -> 14f
+                EnemyComponent.EnemyData.BOMBER -> 13f
+                EnemyComponent.EnemyData.HEALER -> 10f
+                EnemyComponent.EnemyData.SHIELDER -> 16f
+                EnemyComponent.EnemyData.FLYER -> 9f
+                EnemyComponent.EnemyData.ELITE -> 18f
+                EnemyComponent.EnemyData.BOSS -> 35f
+            },
             color = when (enemyType) {
                 EnemyComponent.EnemyData.ZOMBIE -> 0xFF888888.toInt()
                 EnemyComponent.EnemyData.RUNNER -> 0xFFFF1744.toInt()
@@ -156,7 +167,18 @@ class GameState {
                 EnemyComponent.EnemyData.ELITE -> 0xFFFFD700.toInt()
                 EnemyComponent.EnemyData.BOSS -> 0xFFFF1744.toInt()
             },
-            shape = RenderComponent.RenderShape.CIRCLE
+            shape = when (enemyType) {
+                EnemyComponent.EnemyData.ZOMBIE -> RenderComponent.RenderShape.CIRCLE
+                EnemyComponent.EnemyData.RUNNER -> RenderComponent.RenderShape.TRIANGLE
+                EnemyComponent.EnemyData.BRUTE -> RenderComponent.RenderShape.RECT
+                EnemyComponent.EnemyData.SPITTER -> RenderComponent.RenderShape.DIAMOND
+                EnemyComponent.EnemyData.BOMBER -> RenderComponent.RenderShape.CIRCLE
+                EnemyComponent.EnemyData.HEALER -> RenderComponent.RenderShape.CIRCLE
+                EnemyComponent.EnemyData.SHIELDER -> RenderComponent.RenderShape.RECT
+                EnemyComponent.EnemyData.FLYER -> RenderComponent.RenderShape.DIAMOND
+                EnemyComponent.EnemyData.ELITE -> RenderComponent.RenderShape.TRIANGLE
+                EnemyComponent.EnemyData.BOSS -> RenderComponent.RenderShape.CIRCLE
+            }
         ))
         val baseHp = when (enemyType) {
             EnemyComponent.EnemyData.ZOMBIE -> 20f

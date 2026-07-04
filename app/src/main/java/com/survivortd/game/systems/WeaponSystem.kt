@@ -647,6 +647,78 @@ class WeaponSystem(
         state.projectiles[id].onHitEffect = onHitEffect
         state.projectiles[id].onHitEffectDuration = onHitEffectDuration
         state.projectiles[id].onHitEffectMagnitude = onHitEffectMagnitude
+        applyProjectileVisuals(id, ownerWeapon)
+    }
+
+    /**
+     * Override projectile render properties based on weapon type.
+     * Each weapon gets a unique color, size, and shape per GDD §20.
+     */
+    private fun applyProjectileVisuals(id: Int, weapon: WeaponType) {
+        if (id >= state.renders.size) return
+        val render = state.renders[id]
+        when (weapon) {
+            WeaponType.ASSAULT_RIFLE -> {
+                render.color = 0xFFFFFF00.toInt()  // Yellow (physical)
+                render.radius = 4f
+                render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+            }
+            WeaponType.SPREAD_GUN -> {
+                render.color = 0xFFFF6F00.toInt()  // Orange (fire)
+                render.radius = 3f
+                render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+            }
+            WeaponType.KATANA -> {
+                render.color = 0xFFFFFFFF.toInt()  // White (melee)
+                render.radius = 18f  // Large arc
+                render.shape = com.survivortd.game.components.RenderComponent.RenderShape.TRIANGLE
+            }
+            WeaponType.LIGHTNING_ORB -> {
+                render.color = 0xFFFFF700.toInt()  // Bright yellow (lightning)
+                render.radius = 8f
+                render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+            }
+            WeaponType.ROCKET_LAUNCHER -> {
+                render.color = 0xFFFF4500.toInt()  // Orange-red (fire)
+                render.radius = 7f
+                render.shape = com.survivortd.game.components.RenderComponent.RenderShape.RECT
+            }
+            WeaponType.FORCE_FIELD -> {
+                render.color = 0x8000FFFF.toInt()  // Cyan semi-transparent
+                render.radius = 24f
+                render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+            }
+            WeaponType.DRONE -> {
+                render.color = 0xFF42A5F5.toInt()  // Blue
+                render.radius = 5f
+                render.shape = com.survivortd.game.components.RenderComponent.RenderShape.DIAMOND
+            }
+            WeaponType.FROST_NOVA -> {
+                render.color = 0xFF00FFFF.toInt()  // Cyan (ice)
+                render.radius = 32f  // Large AoE circle
+                render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+            }
+            WeaponType.BOOMERANG -> {
+                render.color = 0xFFB0BEC5.toInt()  // Silver
+                render.radius = 6f
+                render.shape = com.survivortd.game.components.RenderComponent.RenderShape.DIAMOND
+            }
+            WeaponType.LANDMINE -> {
+                render.color = 0xFF795548.toInt()  // Brown
+                render.radius = 6f
+                render.shape = com.survivortd.game.components.RenderComponent.RenderShape.RECT
+            }
+            WeaponType.HEALING_PULSE -> {
+                render.color = 0xFF66BB6A.toInt()  // Green
+                render.radius = 16f
+                render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+            }
+            WeaponType.LASER_BEAM -> {
+                render.color = 0xFFFF1744.toInt()  // Red
+                render.radius = 3f
+                render.shape = com.survivortd.game.components.RenderComponent.RenderShape.RECT
+            }
+        }
     }
 
     // ================================================================
