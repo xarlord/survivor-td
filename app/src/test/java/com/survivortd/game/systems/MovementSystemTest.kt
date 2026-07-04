@@ -88,13 +88,15 @@ class MovementSystemTest {
     }
 
     @Test
-    @DisplayName("Elapsed time increases")
-    fun elapsedTimeAdvances() {
+    @DisplayName("Elapsed time is NOT advanced by MovementSystem")
+    fun elapsedTimeNotAdvancedByMovementSystem() {
+        // Game loop (GameScreen) is the sole authority for elapsedSeconds.
+        // MovementSystem must NOT increment it — double-increment was a bug (#75).
         assertEquals(0f, state.elapsedSeconds)
         movement.update(0.5f)
-        assertEquals(0.5f, state.elapsedSeconds, 0.01f)
+        assertEquals(0f, state.elapsedSeconds, 0.01f)
         movement.update(0.5f)
-        assertEquals(1f, state.elapsedSeconds, 0.01f)
+        assertEquals(0f, state.elapsedSeconds, 0.01f)
     }
 
     @Test

@@ -16,7 +16,7 @@ object GameConfig {
 
     // === PLAYER ===
     const val PLAYER_BASE_HP = 100f
-    const val PLAYER_BASE_SPEED = 220f  // px/s
+    const val PLAYER_BASE_SPEED = 440f  // px/s (2x — fast responsive feel)
     const val PLAYER_BASE_PICKUP_RANGE = 60f
     const val PLAYER_BASE_DAMAGE_MULT = 1.0f
     const val PLAYER_BASE_ATTACK_SPEED_MULT = 1.0f
@@ -25,7 +25,7 @@ object GameConfig {
     const val PLAYER_BASE_REGEN = 0.5f  // HP/s
     const val PLAYER_BASE_DODGE = 0f
     const val PLAYER_HITBOX_RADIUS = 20f
-    const val PLAYER_DASH_SPEED = 400f
+    const val PLAYER_DASH_SPEED = 800f   // 2x base for dash
     const val PLAYER_DASH_DURATION = 0.12f  // seconds
     const val PLAYER_DASH_COOLDOWN = 3f     // seconds
 
@@ -49,7 +49,7 @@ object GameConfig {
     const val ENEMY_KNOCKBACK = 150f       // px/s impulse on hit
     const val PLAYER_KNOCKBACK = 80f       // px/s on taking damage
     const val PROJECTILE_LIFETIME = 2.0f   // seconds
-    const val GEM_MAGNET_SPEED = 300f      // px/s when in pickup range
+    const val GEM_MAGNET_SPEED = 600f      // px/s when in pickup range (2x for faster feel)
     const val GEM_LIFETIME = 30f           // seconds before despawn
 
     // === MATCH ===

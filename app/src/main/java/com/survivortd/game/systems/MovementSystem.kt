@@ -31,10 +31,6 @@ class MovementSystem(
 
         // Update enemy movement (chase player)
         updateEnemies(dt)
-
-        // Update elapsed time
-        state.elapsedSeconds += dt
-        state.currentTick++
     }
 
     /**

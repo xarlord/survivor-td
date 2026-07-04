@@ -35,11 +35,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.components.RenderComponent
+import com.survivortd.game.config.GameConfig
 import com.survivortd.game.config.WeaponType
 import com.survivortd.game.core.GameState
 import com.survivortd.game.core.GameLoop
@@ -84,6 +86,7 @@ fun GameScreen(
     var hudTime by remember { mutableLongStateOf(0L) }
     var hudScore by remember { mutableLongStateOf(0L) }
     var hudGold by remember { mutableIntStateOf(0) }
+    var hudFps by remember { mutableIntStateOf(0) }
 
     // [#23] Redraw trigger — increments every frame to force Canvas recomposition.
     // Game entity positions are plain Kotlin objects (NOT Compose State), so the
@@ -93,6 +96,25 @@ fun GameScreen(
     var redrawTrigger by remember { mutableIntStateOf(0) }
     val renderHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     val renderPending = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+
+    // FPS counter: count renders per second
+    val fpsFrames = remember { java.util.concurrent.atomic.AtomicInteger(0) }
+    val fpsExecutor = remember {
+        java.util.concurrent.Executors.newSingleThreadScheduledExecutor().also { exec ->
+            exec.scheduleAtFixedRate({
+                val frames = fpsFrames.getAndSet(0)
+                renderHandler.post {
+                    hudFps = frames
+                    if (frames > 0) {
+                        android.util.Log.d("SurvivorTD-FPS", "FPS=$frames, tick=${gameState.currentTick}")
+                    }
+                }
+            }, 1000, 1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { fpsExecutor.shutdown() }
+    }
 
     // Joystick visual state — triggers redraw at ~60Hz
     var joystickActive by remember { mutableStateOf(false) }
@@ -166,6 +188,7 @@ fun GameScreen(
                 // [#23] Trigger Canvas redraw by bumping state on Main thread.
                 // Guard with AtomicBoolean to prevent flooding Main thread —
                 // only one render callback queued at a time.
+                fpsFrames.incrementAndGet()
                 if (renderPending.compareAndSet(false, true)) {
                     renderHandler.post {
                         renderPending.set(false)
@@ -217,6 +240,7 @@ fun GameScreen(
             secondsRemaining = hudTime,
             score = hudScore,
             gold = hudGold,
+            fps = hudFps,
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
@@ -320,8 +344,19 @@ private fun GameCanvasView(
                 }
             }
     ) {
-        drawGameBackground()
-        drawEntities(gameState)
+        // Viewport: scale world to fill full screen height, center on player
+        val scale = size.height / GameConfig.WORLD_HEIGHT
+        // Camera offset: center the player on screen
+        val camX = gameState.cameraX * scale - size.width / 2f
+        val camY = gameState.cameraY * scale - size.height / 2f
+
+        withTransform({
+            translate(left = camX, top = camY)
+            scale(scale, scale)
+        }) {
+            drawGameBackground()
+            drawEntities(gameState)
+        }
         if (joystickActive) {
             drawJoystick(joystickAnchor, joystickKnob)
         }
@@ -348,40 +383,55 @@ private fun DrawScope.drawGameBackground() {
 
 /**
  * Draws all renderable entities from game state.
+ * Iterates arrays directly — no intermediate object allocation per frame.
  */
 private fun DrawScope.drawEntities(state: GameState) {
-    for (entity in state.renderableEntities) {
-        val color = Color(entity.color.toLong())
-        val center = Offset(entity.x, entity.y)
-        when (entity.shape) {
+    val positions = state.positions
+    val healths = state.healths
+    val renders = state.renders
+    val triPath = androidx.compose.ui.graphics.Path()
+    val diaPath = androidx.compose.ui.graphics.Path()
+
+    for (i in positions.indices) {
+        if (i >= healths.size || healths[i].isDead) continue
+        if (i >= renders.size) continue
+
+        val pos = positions[i]
+        val render = renders[i]
+        val colorInt = render.color
+        val radius = render.radius
+
+        when (render.shape) {
             RenderComponent.RenderShape.CIRCLE -> {
-                drawCircle(color = color, radius = entity.radius, center = center)
+                drawCircle(
+                    color = Color(colorInt.toLong()),
+                    radius = radius,
+                    center = Offset(pos.x, pos.y)
+                )
             }
             RenderComponent.RenderShape.RECT -> {
                 drawRect(
-                    color = color,
-                    topLeft = Offset(entity.x - entity.radius, entity.y - entity.radius),
-                    size = Size(entity.radius * 2, entity.radius * 2)
+                    color = Color(colorInt.toLong()),
+                    topLeft = Offset(pos.x - radius, pos.y - radius),
+                    size = Size(radius * 2, radius * 2)
                 )
             }
             RenderComponent.RenderShape.TRIANGLE -> {
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(entity.x, entity.y - entity.radius)
-                    lineTo(entity.x - entity.radius, entity.y + entity.radius)
-                    lineTo(entity.x + entity.radius, entity.y + entity.radius)
-                    close()
-                }
-                drawPath(path, color = color)
+                triPath.reset()
+                triPath.moveTo(pos.x, pos.y - radius)
+                triPath.lineTo(pos.x - radius, pos.y + radius)
+                triPath.lineTo(pos.x + radius, pos.y + radius)
+                triPath.close()
+                drawPath(triPath, color = Color(colorInt.toLong()))
             }
             RenderComponent.RenderShape.DIAMOND -> {
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(entity.x, entity.y - entity.radius)
-                    lineTo(entity.x + entity.radius, entity.y)
-                    lineTo(entity.x, entity.y + entity.radius)
-                    lineTo(entity.x - entity.radius, entity.y)
-                    close()
-                }
-                drawPath(path, color = color)
+                diaPath.reset()
+                diaPath.moveTo(pos.x, pos.y - radius)
+                diaPath.lineTo(pos.x + radius, pos.y)
+                diaPath.lineTo(pos.x, pos.y + radius)
+                diaPath.lineTo(pos.x - radius, pos.y)
+                diaPath.close()
+                drawPath(diaPath, color = Color(colorInt.toLong()))
             }
         }
     }
@@ -432,6 +482,7 @@ private fun GameHUD(
     secondsRemaining: Long,
     score: Long,
     gold: Int,
+    fps: Int = 0,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -460,6 +511,15 @@ private fun GameHUD(
                     fontSize = 18.sp
                 )
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // FPS counter (debug)
+            Text(
+                text = "${fps}fps",
+                color = Color(0xFF9E9E9E),
+                fontSize = 10.sp
+            )
 
             Spacer(modifier = Modifier.width(8.dp))
 
