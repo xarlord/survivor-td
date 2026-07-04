@@ -51,6 +51,15 @@ class GameState {
     var isPaused: Boolean = false
     var isVictory: Boolean = false
 
+    // === WAVE PROGRESSION (#97) ===
+    var currentWave: Int = 0
+    var waveEnemiesRemaining: Int = 0
+    var isBossWave: Boolean = false
+    var waveAnnouncementText: String = ""
+    var waveAnnouncementTimer: Float = 0f
+    var wavePaused: Boolean = false
+    var wavePauseTimer: Float = 0f
+
     // === LEVEL UP QUEUE ===
     var pendingLevelUps: Int = 0
 
@@ -219,7 +228,9 @@ class GameState {
         scrapValue: Int = 0,
         healAmount: Float = 0f,
         color: Int = 0xFF42A5F5.toInt(),
-        radius: Float = 5f
+        radius: Float = 5f,
+        shape: RenderComponent.RenderShape = RenderComponent.RenderShape.DIAMOND,
+        pickupType: com.survivortd.game.config.PickupType = com.survivortd.game.config.PickupType.XP_GEM_SMALL
     ): Int {
         if (positions.size >= GameConfig.MAX_ENTITIES) return -1
         val id = nextEntityId()
@@ -228,7 +239,7 @@ class GameState {
         renders.add(RenderComponent(
             radius = radius,
             color = color,
-            shape = RenderComponent.RenderShape.DIAMOND
+            shape = shape
         ))
         healths.add(HealthComponent())  // Placeholder
         players.add(PlayerComponent())  // Placeholder
@@ -239,7 +250,8 @@ class GameState {
             goldValue = goldValue,
             scrapValue = scrapValue,
             healAmount = healAmount,
-            lifetime = GameConfig.GEM_LIFETIME
+            lifetime = GameConfig.GEM_LIFETIME,
+            pickupType = pickupType
         ))
         towers.add(TowerComponent())    // Placeholder
         statusEffects.add(StatusEffectsComponent())
@@ -283,13 +295,20 @@ class GameState {
      * Remove all entities marked as dead.
      * Iterates backwards to avoid index shifting — each removal is O(1).
      */
-    fun cleanupDeadEntities() {
+    /**
+     * Remove all entities marked as dead.
+     * Iterates backwards to avoid index shifting — each removal is O(1).
+     * Returns the count of killed enemies (for wave tracking).
+     */
+    fun cleanupDeadEntities(): Int {
+        var killedEnemies = 0
         var i = healths.size - 1
         while (i >= 0) {
             if (i < healths.size && healths[i].isDead) {
                 // Track enemy kills
                 if (i < tags.size && tags[i].tag == TagComponent.EntityTag.ENEMY) {
                     totalKills++
+                    killedEnemies++
                 }
                 positions.removeAt(i)
                 if (i < velocities.size) velocities.removeAt(i)
@@ -305,6 +324,7 @@ class GameState {
             }
             i--
         }
+        return killedEnemies
     }
 
     /**
@@ -333,6 +353,13 @@ class GameState {
         gameOverHandled = false
         isPaused = false
         isVictory = false
+        currentWave = 0
+        waveEnemiesRemaining = 0
+        isBossWave = false
+        waveAnnouncementText = ""
+        waveAnnouncementTimer = 0f
+        wavePaused = false
+        wavePauseTimer = 0f
         pendingLevelUps = 0
         playerIndex = -1
         cameraX = 0f

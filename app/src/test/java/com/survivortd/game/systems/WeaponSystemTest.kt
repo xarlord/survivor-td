@@ -343,6 +343,160 @@ class WeaponSystemTest {
         }
     }
 
+    @Nested
+    @DisplayName("#99 Evolved weapon behavior")
+    inner class EvolvedWeaponTests {
+
+        private fun evolveWeapon(type: WeaponType): WeaponInstance {
+            weaponSys.addWeapon(type)
+            // Find and add the catalyst passive
+            val catalyst = PassiveType.entries.find { it.catalystFor == type }!!
+            weaponSys.addPassive(catalyst)
+            repeat(4) { weaponSys.upgradeWeapon(type) }
+            weaponSys.upgradeWeapon(type)
+            return weaponSys.weapons.first { it.type == type }
+        }
+
+        @Test
+        @DisplayName("Evolved Minigun fires 6+ projectiles")
+        fun evolvedMinigunMultiProjectile() {
+            val w = evolveWeapon(WeaponType.ASSAULT_RIFLE)
+            assertTrue(w.isEvolved)
+            val playerPos = state.positions[state.playerIndex]
+            state.spawnEnemy(
+                x = playerPos.x + 100f, y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val projBefore = countActiveProjectiles()
+            weaponSys.update(1.0f)
+            val projAfter = countActiveProjectiles()
+            val spawned = projAfter - projBefore
+            assertTrue(spawned >= 6,
+                "Evolved Minigun should fire 6+ projectiles, got $spawned")
+        }
+
+        @Test
+        @DisplayName("Evolved Plasma Cannon fires 8+ projectiles in wide cone")
+        fun evolvedPlasmaCannon() {
+            val w = evolveWeapon(WeaponType.SPREAD_GUN)
+            assertTrue(w.isEvolved)
+            val playerPos = state.positions[state.playerIndex]
+            state.spawnEnemy(
+                x = playerPos.x + 100f, y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val projBefore = countActiveProjectiles()
+            weaponSys.update(1.0f)
+            val projAfter = countActiveProjectiles()
+            val spawned = projAfter - projBefore
+            assertTrue(spawned >= 8,
+                "Evolved Plasma Cannon should fire 8+ projectiles, got $spawned")
+        }
+
+        @Test
+        @DisplayName("Evolved Whirlwind Blade hits enemy behind player")
+        fun evolvedWhirlwindHitsBehind() {
+            val w = evolveWeapon(WeaponType.KATANA)
+            assertTrue(w.isEvolved)
+            val playerPos = state.positions[state.playerIndex]
+            // Spawn enemy BEHIND player (180° from forward)
+            val enemyId = state.spawnEnemy(
+                x = playerPos.x - 50f, y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val hpBefore = state.healths[enemyId].currentHp
+            weaponSys.update(1.0f)
+            assertTrue(state.healths[enemyId].currentHp < hpBefore,
+                "Whirlwind Blade (360°) should hit enemies behind player")
+        }
+
+        @Test
+        @DisplayName("Evolved Missile Barrage fires 3 rockets")
+        fun evolvedMissileBarrage() {
+            val w = evolveWeapon(WeaponType.ROCKET_LAUNCHER)
+            assertTrue(w.isEvolved)
+            val playerPos = state.positions[state.playerIndex]
+            state.spawnEnemy(
+                x = playerPos.x + 100f, y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val projBefore = countActiveProjectiles()
+            weaponSys.update(3.0f)
+            val projAfter = countActiveProjectiles()
+            val spawned = projAfter - projBefore
+            assertTrue(spawned >= 3,
+                "Evolved Missile Barrage should fire 3 rockets, got $spawned")
+        }
+
+        @Test
+        @DisplayName("Evolved Plasma Shield applies SLOW to enemies")
+        fun evolvedPlasmaShieldSlows() {
+            val w = evolveWeapon(WeaponType.FORCE_FIELD)
+            assertTrue(w.isEvolved)
+            val playerPos = state.positions[state.playerIndex]
+            val enemyId = state.spawnEnemy(
+                x = playerPos.x + 40f, y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            // Update enough for force field tick to apply
+            repeat(60) { weaponSys.update(0.016f) }
+            val hasSlow = state.statusEffects[enemyId].effects.any {
+                it.type == com.survivortd.game.config.StatusEffectType.SLOW
+            }
+            assertTrue(hasSlow,
+                "Evolved Plasma Shield should apply SLOW to nearby enemies")
+        }
+
+        @Test
+        @DisplayName("Evolved Razor Edge fires 3 boomerangs")
+        fun evolvedRazorEdge() {
+            val w = evolveWeapon(WeaponType.BOOMERANG)
+            assertTrue(w.isEvolved)
+            val playerPos = state.positions[state.playerIndex]
+            state.spawnEnemy(
+                x = playerPos.x + 100f, y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.ZOMBIE
+            )
+            val projBefore = countActiveProjectiles()
+            weaponSys.update(2.0f)
+            val projAfter = countActiveProjectiles()
+            val spawned = projAfter - projBefore
+            assertTrue(spawned >= 3,
+                "Evolved Razor Edge should fire 3 boomerangs, got $spawned")
+        }
+
+        @Test
+        @DisplayName("Evolved Minefield drops 3 mines")
+        fun evolvedMinefield() {
+            val w = evolveWeapon(WeaponType.LANDMINE)
+            assertTrue(w.isEvolved)
+            val projBefore = countActiveProjectiles()
+            weaponSys.update(3.0f)
+            val projAfter = countActiveProjectiles()
+            val spawned = projAfter - projBefore
+            assertTrue(spawned >= 3,
+                "Evolved Minefield should drop 3 mines, got $spawned")
+        }
+
+        @Test
+        @DisplayName("Evolved Regen Aura heals more than base")
+        fun evolvedRegenAura() {
+            weaponSys.addWeapon(WeaponType.HEALING_PULSE)
+            val catalyst = PassiveType.entries.find { it.catalystFor == WeaponType.HEALING_PULSE }!!
+            weaponSys.addPassive(catalyst)
+            repeat(4) { weaponSys.upgradeWeapon(WeaponType.HEALING_PULSE) }
+            weaponSys.upgradeWeapon(WeaponType.HEALING_PULSE)
+            assertTrue(weaponSys.weapons[0].isEvolved)
+
+            val playerHealth = state.healths[state.playerIndex]
+            playerHealth.currentHp = 20f
+            weaponSys.update(5.0f)
+            // Evolved heals 1.5x more than base
+            assertTrue(playerHealth.currentHp > 20f,
+                "Evolved Regen Aura should heal player beyond 20 HP")
+        }
+    }
+
     private fun countActiveProjectiles(): Int {
         var count = 0
         for (i in state.projectiles.indices) {

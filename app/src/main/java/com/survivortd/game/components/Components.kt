@@ -27,7 +27,7 @@ data class RenderComponent(
     var color: Int = 0xFFFFFFFF.toInt(),
     var shape: RenderShape = RenderShape.CIRCLE
 ) {
-    enum class RenderShape { CIRCLE, RECT, TRIANGLE, DIAMOND }
+    enum class RenderShape { CIRCLE, RECT, TRIANGLE, DIAMOND, CROSS }
 }
 
 /**
@@ -129,7 +129,8 @@ data class PickupComponent(
     var scrapValue: Int = 0,
     var healAmount: Float = 0f,
     var isMagnetized: Boolean = false,
-    var lifetime: Float = 30f
+    var lifetime: Float = 30f,
+    var pickupType: com.survivortd.game.config.PickupType = com.survivortd.game.config.PickupType.XP_GEM_SMALL
 )
 
 /**
