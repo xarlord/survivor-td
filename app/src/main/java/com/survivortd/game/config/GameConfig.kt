@@ -90,4 +90,10 @@ object GameConfig {
     const val CAMERA_WIDTH = 720f
     const val CAMERA_HEIGHT = 1280f
     const val CAMERA_LERP = 8f             // smoothing factor for camera follow
+
+    // === ARMOR (#108) ===
+    /** Flat armor reduction per GDD §3.2: armor subtracts flat from incoming damage, floored at 0. */
+    fun armorReduction(damage: Float, armor: Float): Float {
+        return (damage - armor).coerceAtLeast(0f)
+    }
 }

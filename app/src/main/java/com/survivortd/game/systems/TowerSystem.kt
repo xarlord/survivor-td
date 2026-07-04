@@ -202,7 +202,7 @@ class TowerSystem(
         val hp = state.healths.getOrNull(tower.targetId) ?: return
         hp.currentHp -= damage
 
-        // Apply slow effect to nearby enemies
+        // (#111) Apply SLOW status effect to nearby enemies (unified with StatusEffectSystem)
         val center = state.positions[tower.targetId]
         for (i in state.enemies.indices) {
             if (i >= state.tags.size) break
@@ -211,8 +211,7 @@ class TowerSystem(
             val dx = state.positions[i].x - center.x
             val dy = state.positions[i].y - center.y
             if (dx * dx + dy * dy <= 60f * 60f) {
-                state.enemies[i].slowTimer = 2f
-                state.enemies[i].slowMagnitude = 0.4f
+                applySlow(i, 2f, 0.4f)
             }
         }
     }
@@ -304,6 +303,27 @@ class TowerSystem(
                     type = StatusEffectType.STUN,
                     duration = duration,
                     magnitude = 1f
+                )
+            )
+        }
+    }
+
+    /**
+     * (#111) Apply a SLOW status effect to an enemy (unified with StatusEffectSystem).
+     */
+    private fun applySlow(enemyIndex: Int, duration: Float, magnitude: Float) {
+        if (enemyIndex < 0 || enemyIndex >= state.statusEffects.size) return
+        val se = state.statusEffects[enemyIndex]
+        val existing = se.effects.find { it.type == StatusEffectType.SLOW }
+        if (existing != null) {
+            existing.duration = maxOf(existing.duration, duration)
+        } else {
+            se.effects.add(
+                com.survivortd.game.components.StatusEffectsComponent.ActiveStatus(
+                    type = StatusEffectType.SLOW,
+                    duration = duration,
+                    magnitude = magnitude,
+                    tickInterval = 0f
                 )
             )
         }

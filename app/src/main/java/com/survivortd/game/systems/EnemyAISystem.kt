@@ -62,13 +62,53 @@ class EnemyAISystem(
                 EnemyData.ZOMBIE -> updateZombie(enemy, vel, dirX, dirY, dt)
                 EnemyData.RUNNER -> updateRunner(enemy, vel, dirX, dirY, dist, dt)
                 EnemyData.BRUTE -> updateBrute(enemy, vel, dirX, dirY, dist, dt)
-                EnemyData.SPITTER -> updateSpitter(enemy, vel, dirX, dirY, dist, dt)
+                EnemyData.SPITTER -> updateSpitter(enemy, i, vel, dirX, dirY, dist, dt)
                 EnemyData.BOMBER -> updateBomber(enemy, vel, dirX, dirY, dist, dt, pos, playerPos)
                 EnemyData.HEALER -> updateHealer(enemy, i, vel, dirX, dirY, dist, dt)
                 EnemyData.SHIELDER -> updateShielder(enemy, i, vel, dirX, dirY, dist, dt)
                 EnemyData.FLYER -> updateFlyer(enemy, vel, dirX, dirY, dt)
                 EnemyData.ELITE -> updateElite(enemy, vel, dirX, dirY, dist, dt)
                 EnemyData.BOSS -> updateBoss(enemy, i, vel, dirX, dirY, dist, dt, pos, playerPos)
+            }
+        }
+
+        // (#117) Enemy-enemy separation: push apart overlapping enemies
+        applyEnemySeparation()
+    }
+
+    /**
+     * (#117) Simple separation force — push overlapping enemies apart
+     * to prevent stacking and improve visual clarity.
+     */
+    private fun applyEnemySeparation() {
+        for (i in state.enemies.indices) {
+            if (i >= state.healths.size || state.healths[i].isDead) continue
+            if (i >= state.tags.size || state.tags[i].tag != TagComponent.EntityTag.ENEMY) continue
+            if (i >= state.positions.size || i >= state.renders.size) continue
+
+            for (j in i + 1 until state.positions.size) {
+                if (j >= state.healths.size || state.healths[j].isDead) continue
+                if (j >= state.tags.size || state.tags[j].tag != TagComponent.EntityTag.ENEMY) continue
+                if (j >= state.renders.size) continue
+
+                val dx = state.positions[j].x - state.positions[i].x
+                val dy = state.positions[j].y - state.positions[i].y
+                val distSq = dx * dx + dy * dy
+                val minDist = state.renders[i].radius + state.renders[j].radius
+                if (distSq < minDist * minDist) {
+                    val (nx, ny, dist) = if (distSq > 0.01f) {
+                        val d = sqrt(distSq)
+                        Triple(dx / d, dy / d, d)
+                    } else {
+                        // Enemies at exact same position — push in arbitrary direction
+                        Triple(1f, 0f, 0f)
+                    }
+                    val overlap = (minDist - dist) * 0.3f
+                    state.positions[i].x -= nx * overlap
+                    state.positions[i].y -= ny * overlap
+                    state.positions[j].x += nx * overlap
+                    state.positions[j].y += ny * overlap
+                }
             }
         }
     }
@@ -154,7 +194,8 @@ class EnemyAISystem(
     // SPITTER — kiter: approach to ~250px, then strafe + keep distance
     // ================================================================
     private fun updateSpitter(
-        enemy: EnemyComponent, vel: com.survivortd.game.components.VelocityComponent,
+        enemy: EnemyComponent, myIndex: Int,
+        vel: com.survivortd.game.components.VelocityComponent,
         dirX: Float, dirY: Float, dist: Float, dt: Float
     ) {
         val idealRange = 250f
@@ -184,6 +225,24 @@ class EnemyAISystem(
                 vel.x = perpX * strafeSpeed * strafeDir
                 vel.y = perpY * strafeSpeed * strafeDir
                 enemy.aiState = AiState.KITE
+
+                // (#110) Spitter ranged attack: fire projectile toward player every 1.5s
+                enemy.aiTimer += dt
+                if (enemy.aiTimer > 1.5f) {
+                    enemy.aiTimer = 0f
+                    val pos = state.positions[myIndex]
+                    val projId = state.spawnProjectile(pos.x, pos.y)
+                    if (projId >= 0) {
+                        val playerPos = state.positions[state.playerIndex]
+                        val dx = playerPos.x - pos.x
+                        val dy = playerPos.y - pos.y
+                        val d = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+                        state.velocities[projId].x = (dx / d) * 200f
+                        state.velocities[projId].y = (dy / d) * 200f
+                        state.projectiles[projId].damage = 15f
+                        state.projectiles[projId].lifetime = 3f
+                    }
+                }
             }
         }
     }

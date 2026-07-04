@@ -1,6 +1,7 @@
 package com.survivortd.game.systems
 
 import com.survivortd.game.components.StatusEffectsComponent
+import com.survivortd.game.config.GameConfig
 import com.survivortd.game.config.StatusEffectType
 import com.survivortd.game.core.GameState
 import org.junit.jupiter.api.Assertions.*
@@ -78,7 +79,8 @@ class StatusEffectSystemTest {
         @DisplayName("BLEED deals damage subject to armor")
         fun bleedDealsDamageWithArmor() {
             val idx = spawnEnemy()
-            state.healths[idx].armor = 10f
+            // (#108) Use armor=3 so flat reduction still allows damage through: max(10-3,0)=7
+            state.healths[idx].armor = 3f
             applyStatusTo(idx, StatusEffectType.BLEED, duration = 5f, magnitude = 10f)
             val initialHp = state.healths[idx].currentHp
             sys.update(0.6f)
@@ -86,11 +88,11 @@ class StatusEffectSystemTest {
                 state.healths[idx].currentHp < initialHp,
                 "BLEED should deal damage (reduced by armor)"
             )
-            // With armor=10, reduction = 10/(10+10) = 0.5, so damage = 10 * (1-0.5) = 5
-            val expectedDamage = 10f * (1f - 10f / (10f + 10f))
+            // Flat armor: damage = max(10 - 3, 0) = 7
+            val expectedDamage = GameConfig.armorReduction(10f, 3f)
             assertEquals(
                 initialHp - expectedDamage, state.healths[idx].currentHp, 0.1f,
-                "BLEED should be reduced by armor"
+                "BLEED should be reduced by armor (flat subtraction)"
             )
         }
     }
