@@ -152,7 +152,7 @@ fun GameScreen(
     // Create ALL game systems
     val particleSystem = remember { com.survivortd.game.systems.ParticleSystem(gameState) }
     val gameFeelSystem = remember { com.survivortd.game.systems.GameFeelSystem() }
-    val movementSystem = remember { com.survivortd.game.systems.MovementSystem(gameState, joystick) }
+    val movementSystem = remember { com.survivortd.game.systems.MovementSystem(gameState) }
     val combatSystem = remember { com.survivortd.game.systems.CombatSystem(gameState, gameFeelSystem, com.survivortd.game.systems.MetaProgression()) }
     val enemyAiSystem = remember { com.survivortd.game.systems.EnemyAISystem(gameState) }
     val pickupSystem = remember { com.survivortd.game.systems.PickupSystem(gameState, particleSystem) }
