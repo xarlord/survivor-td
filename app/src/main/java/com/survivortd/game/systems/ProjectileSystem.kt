@@ -3,6 +3,7 @@ package com.survivortd.game.systems
 import com.survivortd.game.components.EnemyComponent
 import com.survivortd.game.components.ProjectileComponent
 import com.survivortd.game.components.TagComponent
+import com.survivortd.game.config.GameConfig
 import com.survivortd.game.core.GameState
 import kotlin.math.sqrt
 
@@ -223,6 +224,7 @@ class ProjectileSystem(
 
     /**
      * Deal projectile damage to an enemy (respects shielder reduction).
+     * (#111: Added crit logic matching WeaponSystem)
      */
     private fun dealProjectileDamage(
         enemyIndex: Int,
@@ -236,10 +238,15 @@ class ProjectileSystem(
         if (enemyIndex < state.enemies.size && state.enemies[enemyIndex].knockbackResist >= 2f) {
             damage *= 0.5f
         }
-        // Armor
-        damage = (damage - health.armor).coerceAtLeast(damage * 0.1f)
+        // Armor (#108: flat subtraction per GDD §3.2)
+        damage = GameConfig.armorReduction(damage, health.armor)
 
-        health.currentHp -= damage
+        // (#111) Crit check — matches WeaponSystem behavior
+        val playerComp = state.players.getOrNull(minOf(state.playerIndex, state.players.size - 1))
+        val crit = playerComp != null && kotlin.random.Random.nextFloat() < playerComp.critChance
+        val finalDamage = if (crit) damage * 2f else damage
+
+        health.currentHp -= finalDamage
     }
 
     /**
@@ -251,7 +258,8 @@ class ProjectileSystem(
         if (enemyIndex < state.enemies.size && state.enemies[enemyIndex].knockbackResist >= 2f) {
             dmg *= 0.5f
         }
-        dmg = (dmg - health.armor).coerceAtLeast(dmg * 0.1f)
+        // Armor (#108: flat subtraction per GDD §3.2)
+        dmg = GameConfig.armorReduction(dmg, health.armor)
         health.currentHp -= dmg
     }
 

@@ -1,5 +1,6 @@
 package com.survivortd.game.systems
 
+import com.survivortd.game.config.GameConfig
 import com.survivortd.game.config.StatusEffectType
 import com.survivortd.game.core.GameState
 
@@ -55,9 +56,10 @@ class StatusEffectSystem(
                             if (effect.type == StatusEffectType.POISON) {
                                 state.healths[i].currentHp -= dotDamage
                             } else {
+                                // Armor (#108: flat subtraction per GDD §3.2)
                                 val armor = if (i < state.healths.size) state.healths[i].armor else 0f
-                                val reduction = armor / (armor + 10f)
-                                state.healths[i].currentHp -= dotDamage * (1f - reduction)
+                                val mitigated = GameConfig.armorReduction(dotDamage, armor)
+                                state.healths[i].currentHp -= mitigated
                             }
                         }
                     }

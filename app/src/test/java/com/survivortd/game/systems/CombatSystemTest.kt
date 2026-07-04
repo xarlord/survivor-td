@@ -143,4 +143,91 @@ class CombatSystemTest {
         assertEquals(hpBefore, state.healths[pid].currentHp, 0.01f,
             "No damage should occur when paused")
     }
+
+    // ================================================================
+    // #108: Armor reduction
+    // ================================================================
+    @Test
+    @DisplayName("#108: Armor uses flat subtraction formula")
+    fun armorUsesFlatSubtraction() {
+        val pid = state.playerIndex
+        state.healths[pid].armor = 5f  // 5 flat armor
+        val playerPos = state.positions[pid]
+        state.spawnEnemy(
+            x = playerPos.x + 10f,
+            y = playerPos.y,
+            enemyType = EnemyComponent.EnemyData.ZOMBIE  // baseDamage = 10
+        )
+        combat.update(0.016f)
+        val hpBefore = 100f
+        // Zombie baseDamage=10, minute 0, no scaling. Flat armor: 10-5=5 damage
+        assertEquals(95f, state.healths[pid].currentHp, 0.1f,
+            "Armor should subtract flat from damage")
+    }
+
+    @Test
+    @DisplayName("#108: Armor cannot reduce damage below 0")
+    fun armorFloorsAtZero() {
+        val pid = state.playerIndex
+        state.healths[pid].armor = 100f  // Very high armor
+        val playerPos = state.positions[pid]
+        state.spawnEnemy(
+            x = playerPos.x + 10f,
+            y = playerPos.y,
+            enemyType = EnemyComponent.EnemyData.ZOMBIE
+        )
+        val hpBefore = state.healths[pid].currentHp
+        combat.update(0.016f)
+        assertEquals(hpBefore, state.healths[pid].currentHp, 0.01f,
+            "Damage should be 0 when armor exceeds damage")
+    }
+
+    // ================================================================
+    // #110: Bomber explosion
+    // ================================================================
+    @Test
+    @DisplayName("#110: Bomber in SPECIAL state with aiTimer > 0.5s explodes and damages nearby enemies")
+    fun bomberExplosion() {
+        // Spawn bomber near player
+        val playerPos = state.positions[state.playerIndex]
+        val bomberId = state.spawnEnemy(
+            x = playerPos.x + 20f, y = playerPos.y,
+            enemyType = EnemyComponent.EnemyData.BOMBER
+        )
+        // Spawn a nearby zombie within 80px
+        val zombieId = state.spawnEnemy(
+            x = playerPos.x + 30f, y = playerPos.y,
+            enemyType = EnemyComponent.EnemyData.ZOMBIE
+        )
+        val zombieHpBefore = state.healths[zombieId].currentHp
+
+        // Set bomber to SPECIAL state with timer > 0.5s
+        state.enemies[bomberId].aiState = EnemyComponent.AiState.SPECIAL
+        state.enemies[bomberId].aiTimer = 0.6f
+
+        combat.update(0.016f)
+
+        // Bomber should die
+        assertTrue(state.healths[bomberId].isDead, "Bomber should die after explosion")
+        // Nearby zombie should take 40 damage
+        assertTrue(state.healths[zombieId].currentHp < zombieHpBefore,
+            "Nearby zombie should take AoE damage from bomber explosion")
+    }
+
+    @Test
+    @DisplayName("#110: Bomber does NOT explode before aiTimer reaches 0.5s")
+    fun bomberNoExplosionBeforeTimer() {
+        val playerPos = state.positions[state.playerIndex]
+        val bomberId = state.spawnEnemy(
+            x = playerPos.x + 20f, y = playerPos.y,
+            enemyType = EnemyComponent.EnemyData.BOMBER
+        )
+        state.enemies[bomberId].aiState = EnemyComponent.AiState.SPECIAL
+        state.enemies[bomberId].aiTimer = 0.3f  // Not yet
+
+        combat.update(0.016f)
+
+        assertFalse(state.healths[bomberId].isDead,
+            "Bomber should NOT explode before aiTimer > 0.5s")
+    }
 }

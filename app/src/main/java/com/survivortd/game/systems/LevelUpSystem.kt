@@ -235,17 +235,21 @@ class LevelUpSystem(
     private fun passiveDescription(pt: PassiveType): String {
         return when (pt) {
             PassiveType.POWER_CORE -> "+15% damage per stack"
-            PassiveType.RAPID_LOADER -> "-8% cooldown per stack"
+            // TODO(#109): Align code effect to GDD §5.2 in future PR
+            PassiveType.RAPID_LOADER -> "+10% attack speed per stack"
             PassiveType.ENERGY_DRINK -> "+10% move speed per stack"
-            PassiveType.HIGH_VOLTAGE -> "+20% crit chance per stack"
+            // TODO(#109): Align code effect to GDD §5.2 in future PR
+            PassiveType.HIGH_VOLTAGE -> "+15% orb speed per stack"
             PassiveType.HEAVY_CALIBER -> "+25% projectile size per stack"
             PassiveType.REINFORCED_PLATING -> "+15 max HP per stack"
-            PassiveType.CPU_UPGRADE -> "+10% pickup range per stack"
+            // TODO(#109): Align code effect to GDD §5.2 in future PR
+            PassiveType.CPU_UPGRADE -> "+10% attack speed per stack"
             PassiveType.CRYO_MODULE -> "+15% slow duration per stack"
             PassiveType.SHARP_EDGE -> "+15% crit damage per stack"
             PassiveType.EXPANDED_MAGAZINE -> "+1 projectile per stack"
             PassiveType.MED_KIT -> "+2 HP/sec regen per stack"
-            PassiveType.BATTERY -> "-5% cooldown per stack"
+            // TODO(#109): Align code effect to GDD §5.2 in future PR
+            PassiveType.BATTERY -> "+10% weapon area per stack"
         }
     }
 
