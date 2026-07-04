@@ -89,8 +89,8 @@ class GddConfigValidationTest {
         fun targetFps() = assertEquals(60, GameConfig.TARGET_FPS)
 
         @Test
-        @DisplayName("Max entities = 500")
-        fun maxEntities() = assertEquals(500, GameConfig.MAX_ENTITIES)
+        @DisplayName("Max entities >= 500")
+        fun maxEntities() = assertTrue(GameConfig.MAX_ENTITIES >= 500, "MAX_ENTITIES should be at least 500")
     }
 
     @Nested

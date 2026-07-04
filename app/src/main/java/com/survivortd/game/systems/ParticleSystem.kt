@@ -140,11 +140,12 @@ class ParticleSystem(private val state: GameState) {
 
     /**
      * Update all particles — move, apply gravity, decrease life, remove dead.
+     * (#115) Uses index-based backward iteration to avoid iterator allocation.
      */
     fun update(dt: Float) {
-        val it = particles.iterator()
-        while (it.hasNext()) {
-            val p = it.next()
+        var i = particles.size - 1
+        while (i >= 0) {
+            val p = particles[i]
             p.x += p.vx * dt
             p.y += p.vy * dt
             p.vy += p.gravity * dt
@@ -153,8 +154,9 @@ class ParticleSystem(private val state: GameState) {
             p.vy *= 0.95f
             p.life -= dt
             if (p.life <= 0f) {
-                it.remove()
+                particles.removeAt(i)
             }
+            i--
         }
     }
 

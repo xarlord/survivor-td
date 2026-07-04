@@ -53,6 +53,7 @@ import com.survivortd.game.systems.LevelUpSystem
 import com.survivortd.game.systems.UpgradeChoice
 import com.survivortd.game.systems.VirtualJoystick
 import com.survivortd.game.systems.WeaponSystem
+import com.survivortd.game.utils.FrustumCuller
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -509,14 +510,25 @@ private fun GameCanvasView(
         val camX = gameState.cameraX * scale - size.width / 2f + gameFeelSystem.shakeOffsetX * scale
         val camY = gameState.cameraY * scale - size.height / 2f + gameFeelSystem.shakeOffsetY * scale
 
+        // (#115) Frustum culler — compute world-space view bounds for off-screen skip
+        val culler = FrustumCuller().apply {
+            margin = 100f / scale  // margin in world units
+            update(
+                camX = gameState.cameraX - (size.width / scale) / 2f,
+                camY = gameState.cameraY - (size.height / scale) / 2f,
+                viewWidth = size.width / scale,
+                viewHeight = size.height / scale
+            )
+        }
+
         withTransform({
             translate(left = camX, top = camY)
             scale(scale, scale)
         }) {
             drawGameBackground(gameState)
-            drawEntities(gameState)
-            drawParticles(particleSystem)
-            drawTowers(towerSystem)
+            drawEntities(gameState, culler)
+            drawParticles(particleSystem, culler)
+            drawTowers(towerSystem, culler)
             drawPlayerGlow(gameState)
         }
 
@@ -584,9 +596,10 @@ private fun DrawScope.drawParallaxGrid(offsetX: Float, offsetY: Float, gridSize:
 
 /**
  * Draws all renderable entities from game state.
- * Iterates arrays directly — no intermediate object allocation per frame.
+ * (#115) Iterates arrays directly with frustum culling to skip off-screen entities.
+ * Pre-calculates values outside the loop. Reuses Path objects to avoid allocations.
  */
-private fun DrawScope.drawEntities(state: GameState) {
+private fun DrawScope.drawEntities(state: GameState, culler: FrustumCuller) {
     val positions = state.positions
     val healths = state.healths
     val renders = state.renders
@@ -594,159 +607,141 @@ private fun DrawScope.drawEntities(state: GameState) {
     val statusEffects = state.statusEffects
     val triPath = androidx.compose.ui.graphics.Path()
     val diaPath = androidx.compose.ui.graphics.Path()
+    val sinVal = kotlin.math.sin(state.elapsedSeconds * GameConfig.PICKUP_PULSE_SPEED)
+    val pulse = (sinVal + 1f) * 0.5f
 
     for (i in positions.indices) {
         if (i >= healths.size || healths[i].isDead) continue
         if (i >= renders.size) continue
 
         val pos = positions[i]
+        val px = pos.x
+        val py = pos.y
+
+        // (#115) Frustum culling — skip off-screen entities
+        if (!culler.isVisible(px, py)) continue
+
         val render = renders[i]
         val colorInt = render.color
-        val radius = render.radius
-        val center = Offset(pos.x, pos.y)
+        var radius = render.radius
 
-        // [#85] Draw status effect glow behind enemies
+        // (#85) Draw status effect glow behind enemies
         if (i < tags.size && tags[i].tag == com.survivortd.game.components.TagComponent.EntityTag.ENEMY
             && i < statusEffects.size && statusEffects[i].effects.isNotEmpty()
         ) {
-            drawStatusEffectGlow(center, radius, statusEffects[i].effects)
+            drawStatusEffectGlow(Offset(px, py), radius, statusEffects[i].effects)
         }
 
-        // [#91] Pulse animation for pickups
+        // (#91) Pulse animation for pickups — pre-calculated outside loop
         val isPickup = i < tags.size &&
             tags[i].tag == com.survivortd.game.components.TagComponent.EntityTag.PICKUP
         if (isPickup) {
-            val pulse = (kotlin.math.sin(state.elapsedSeconds * GameConfig.PICKUP_PULSE_SPEED) + 1f) * 0.5f
-            val pulsedRadius = radius * (0.85f + pulse * 0.15f)
-            // Use pulsed radius for drawing
-            val drawRadius = pulsedRadius
-            when (render.shape) {
-                RenderComponent.RenderShape.CIRCLE -> {
-                    drawCircle(
-                        color = Color(colorInt.toLong()),
-                        radius = drawRadius,
-                        center = center
-                    )
-                }
-                RenderComponent.RenderShape.RECT -> {
-                    drawRect(
-                        color = Color(colorInt.toLong()),
-                        topLeft = Offset(pos.x - drawRadius, pos.y - drawRadius),
-                        size = Size(drawRadius * 2, drawRadius * 2)
-                    )
-                }
-                RenderComponent.RenderShape.TRIANGLE -> {
-                    triPath.reset()
-                    triPath.moveTo(pos.x, pos.y - drawRadius)
-                    triPath.lineTo(pos.x - drawRadius, pos.y + drawRadius)
-                    triPath.lineTo(pos.x + drawRadius, pos.y + drawRadius)
-                    triPath.close()
-                    drawPath(triPath, color = Color(colorInt.toLong()))
-                }
-                RenderComponent.RenderShape.DIAMOND -> {
-                    diaPath.reset()
-                    diaPath.moveTo(pos.x, pos.y - drawRadius)
-                    diaPath.lineTo(pos.x + drawRadius, pos.y)
-                    diaPath.lineTo(pos.x, pos.y + drawRadius)
-                    diaPath.lineTo(pos.x - drawRadius, pos.y)
-                    diaPath.close()
-                    drawPath(diaPath, color = Color(colorInt.toLong()))
-                }
-                // [#91] CROSS shape for health pickups
-                RenderComponent.RenderShape.CROSS -> {
-                    val armWidth = drawRadius * 0.35f
-                    drawRect(
-                        color = Color(colorInt.toLong()),
-                        topLeft = Offset(pos.x - armWidth, pos.y - drawRadius),
-                        size = Size(armWidth * 2, drawRadius * 2)
-                    )
-                    drawRect(
-                        color = Color(colorInt.toLong()),
-                        topLeft = Offset(pos.x - drawRadius, pos.y - armWidth),
-                        size = Size(drawRadius * 2, armWidth * 2)
-                    )
-                }
-            }
-        } else {
+            radius = radius * (0.85f + pulse * 0.15f)
+        }
+
+        // Draw shape — single path to avoid code duplication
         when (render.shape) {
             RenderComponent.RenderShape.CIRCLE -> {
                 drawCircle(
                     color = Color(colorInt.toLong()),
                     radius = radius,
-                    center = Offset(pos.x, pos.y)
+                    center = Offset(px, py)
                 )
             }
             RenderComponent.RenderShape.RECT -> {
                 drawRect(
                     color = Color(colorInt.toLong()),
-                    topLeft = Offset(pos.x - radius, pos.y - radius),
-                    size = Size(radius * 2, radius * 2)
+                    topLeft = Offset(px - radius, py - radius),
+                    size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2)
                 )
             }
             RenderComponent.RenderShape.TRIANGLE -> {
                 triPath.reset()
-                triPath.moveTo(pos.x, pos.y - radius)
-                triPath.lineTo(pos.x - radius, pos.y + radius)
-                triPath.lineTo(pos.x + radius, pos.y + radius)
+                triPath.moveTo(px, py - radius)
+                triPath.lineTo(px - radius, py + radius)
+                triPath.lineTo(px + radius, py + radius)
                 triPath.close()
                 drawPath(triPath, color = Color(colorInt.toLong()))
             }
             RenderComponent.RenderShape.DIAMOND -> {
                 diaPath.reset()
-                diaPath.moveTo(pos.x, pos.y - radius)
-                diaPath.lineTo(pos.x + radius, pos.y)
-                diaPath.lineTo(pos.x, pos.y + radius)
-                diaPath.lineTo(pos.x - radius, pos.y)
+                diaPath.moveTo(px, py - radius)
+                diaPath.lineTo(px + radius, py)
+                diaPath.lineTo(px, py + radius)
+                diaPath.lineTo(px - radius, py)
                 diaPath.close()
                 drawPath(diaPath, color = Color(colorInt.toLong()))
             }
-            // [#91] CROSS shape for health pickups
+            // (#91) CROSS shape for health pickups
             RenderComponent.RenderShape.CROSS -> {
                 val armWidth = radius * 0.35f
+                val crossColor = Color(colorInt.toLong())
                 drawRect(
-                    color = Color(colorInt.toLong()),
-                    topLeft = Offset(pos.x - armWidth, pos.y - radius),
-                    size = Size(armWidth * 2, radius * 2)
+                    color = crossColor,
+                    topLeft = Offset(px - armWidth, py - radius),
+                    size = androidx.compose.ui.geometry.Size(armWidth * 2, radius * 2)
                 )
                 drawRect(
-                    color = Color(colorInt.toLong()),
-                    topLeft = Offset(pos.x - radius, pos.y - armWidth),
-                    size = Size(radius * 2, armWidth * 2)
+                    color = crossColor,
+                    topLeft = Offset(px - radius, py - armWidth),
+                    size = androidx.compose.ui.geometry.Size(radius * 2, armWidth * 2)
                 )
             }
         }
-        } // end else
     }
 }
 
 /**
  * Draws a glow outline behind enemies with active status effects.
- * Dominant effect gets the full glow; secondary effects get a thinner ring.
+ * (#115) Avoids allocations: uses pre-computed color map and inline sort logic.
  */
+private fun drawStatusEffectGlowColor(effectType: com.survivortd.game.config.StatusEffectType): Int? {
+    return when (effectType) {
+        com.survivortd.game.config.StatusEffectType.BURN -> 0xFFFF1744.toInt()
+        com.survivortd.game.config.StatusEffectType.POISON -> 0xFF76FF03.toInt()
+        com.survivortd.game.config.StatusEffectType.FREEZE -> 0xFF81D4FA.toInt()
+        com.survivortd.game.config.StatusEffectType.STUN -> 0xFFFFFF00.toInt()
+        com.survivortd.game.config.StatusEffectType.SLOW -> 0xFFCE93D8.toInt()
+        com.survivortd.game.config.StatusEffectType.BLEED -> 0xFFFF1744.toInt()
+        com.survivortd.game.config.StatusEffectType.SLOW_ATTACK -> 0xFFCE93D8.toInt()
+    }
+}
+
 private fun DrawScope.drawStatusEffectGlow(
     center: Offset,
     radius: Float,
     effects: List<com.survivortd.game.components.StatusEffectsComponent.ActiveStatus>
 ) {
-    val colorMap = mapOf(
-        com.survivortd.game.config.StatusEffectType.BURN to 0xFFFF1744.toInt(),
-        com.survivortd.game.config.StatusEffectType.POISON to 0xFF76FF03.toInt(),
-        com.survivortd.game.config.StatusEffectType.FREEZE to 0xFF81D4FA.toInt(),
-        com.survivortd.game.config.StatusEffectType.STUN to 0xFFFFFF00.toInt(),
-        com.survivortd.game.config.StatusEffectType.SLOW to 0xFFCE93D8.toInt(),
-        com.survivortd.game.config.StatusEffectType.BLEED to 0xFFFF1744.toInt(),
-        com.survivortd.game.config.StatusEffectType.SLOW_ATTACK to 0xFFCE93D8.toInt()
-    )
+    // Only show top 2 effects by duration (avoid allocating sorted list)
+    var maxDur1 = -1f
+    var maxDur2 = -1f
+    var effect1: com.survivortd.game.components.StatusEffectsComponent.ActiveStatus? = null
+    var effect2: com.survivortd.game.components.StatusEffectsComponent.ActiveStatus? = null
+    for (effect in effects) {
+        if (effect.duration > maxDur1) {
+            effect2 = effect1
+            maxDur2 = maxDur1
+            effect1 = effect
+            maxDur1 = effect.duration
+        } else if (effect.duration > maxDur2) {
+            effect2 = effect
+            maxDur2 = effect.duration
+        }
+    }
 
-    val sorted = effects.sortedByDescending { it.duration }
-    for ((ringIndex, effect) in sorted.withIndex()) {
-        if (ringIndex >= 2) break
-        val colorInt = colorMap[effect.type] ?: continue
-        val glowRadius = radius + 4f + ringIndex * 3f
-        val alpha = if (ringIndex == 0) 0.5f else 0.3f
+    effect1?.let { effect ->
+        val colorInt = drawStatusEffectGlowColor(effect.type) ?: return@let
         drawCircle(
-            color = Color(colorInt.toLong()).copy(alpha = alpha),
-            radius = glowRadius,
+            color = Color(colorInt.toLong()).copy(alpha = 0.5f),
+            radius = radius + 4f,
+            center = center
+        )
+    }
+    effect2?.let { effect ->
+        val colorInt = drawStatusEffectGlowColor(effect.type) ?: return@let
+        drawCircle(
+            color = Color(colorInt.toLong()).copy(alpha = 0.3f),
+            radius = radius + 7f,
             center = center
         )
     }
@@ -754,14 +749,18 @@ private fun DrawScope.drawStatusEffectGlow(
 
 /**
  * Draws all active particles from the particle system.
- * Particles fade out based on remaining lifetime.
+ * (#115) Particles fade out based on remaining lifetime.
+ * Frustum culling skips off-screen particles.
  */
 private fun DrawScope.drawParticles(
-    particleSystem: com.survivortd.game.systems.ParticleSystem
+    particleSystem: com.survivortd.game.systems.ParticleSystem,
+    culler: FrustumCuller
 ) {
     val particles = particleSystem.particles
     for (i in particles.indices) {
         val p = particles[i]
+        // (#115) Frustum cull particles
+        if (!culler.isVisible(p.x, p.y)) continue
         val alpha = (p.life / p.maxLife).coerceIn(0f, 1f)
         drawCircle(
             color = Color(p.color.toLong()).copy(alpha = alpha),
@@ -774,11 +773,14 @@ private fun DrawScope.drawParticles(
 /**
  * Draws placed towers from TowerSystem's local list.
  * Each tower type has a unique color and shape.
+ * (#115) Frustum culling skips off-screen towers.
  */
 private fun DrawScope.drawTowers(
-    towerSystem: com.survivortd.game.systems.TowerSystem
+    towerSystem: com.survivortd.game.systems.TowerSystem,
+    culler: FrustumCuller
 ) {
     for (tower in towerSystem.towers) {
+        if (!culler.isVisible(tower.x, tower.y)) continue
         val color = when (tower.type) {
             com.survivortd.game.config.TowerType.GUN_TURRET -> Color(0xFF42A5F5)
             com.survivortd.game.config.TowerType.CANNON -> Color(0xFFFF6F00)
@@ -945,13 +947,13 @@ private fun GameHUD(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Timer
+            // Timer — (#115) use StringBuilder to avoid format() allocation
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("TIME", color = Color(0xFF9E9E9E), fontSize = 9.sp)
                 val mins = secondsRemaining / 60
                 val secs = secondsRemaining % 60
                 Text(
-                    text = "%d:%02d".format(mins, secs),
+                    text = "$mins:${secs.toString().padStart(2, '0')}",
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
@@ -1074,6 +1076,7 @@ private fun RunSummaryScreen(
 ) {
     val mins = (900 - timeSeconds) / 60
     val secs = (900 - timeSeconds) % 60
+    val timeString = "$mins:${secs.toString().padStart(2, '0')}"
 
     val titleText = if (isVictory) "VICTORY!" else "RUN OVER"
     val titleColor = if (isVictory) Color(0xFF00E676) else Color(0xFFFF1744)
@@ -1100,7 +1103,7 @@ private fun RunSummaryScreen(
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            StatRow("⏱ Time", "%d:%02d".format(mins, secs))
+            StatRow("⏱ Time", timeString)
             StatRow("🏆 Level", "$level")
             StatRow("💀 Kills", "$kills")
             StatRow("🪙 Gold", "$gold")

@@ -12,7 +12,11 @@ object GameConfig {
     const val TARGET_FPS = 60
     const val FIXED_TIMESTEP = 1f / TARGET_FPS
     const val MAX_ACCUMULATOR = 0.25f  // Cap to prevent spiral of death
-    const val MAX_ENTITIES = 500       // Hard cap for ECS entities
+    const val MAX_ENTITIES = 1000      // Hard cap for ECS entities
+    const val MAX_ENEMIES = 300        // Soft cap for simultaneous enemies
+    const val MAX_PROJECTILES = 200    // Soft cap for simultaneous projectiles
+    const val MAX_PICKUPS = 150         // Soft cap for simultaneous pickups
+    const val MAX_SPAWN_PER_FRAME = 3  // Frame-budget limit for spawning
 
     // === PLAYER ===
     const val PLAYER_BASE_HP = 100f

@@ -122,7 +122,23 @@ data class ProjectileComponent(
     var isBoomerang: Boolean = false,
     var isMine: Boolean = false,
     var ownerWeapon: com.survivortd.game.config.WeaponType = com.survivortd.game.config.WeaponType.ASSAULT_RIFLE
-)
+) {
+    /** Reset to default values for pool reuse. */
+    fun reset() {
+        damage = 10f
+        pierceCount = 0
+        lifetime = 2f
+        homing = false
+        onHitEffect = null
+        onHitEffectDuration = 0f
+        onHitEffectMagnitude = 0f
+        hitEntityIds.clear()
+        aoeRadius = 0f
+        isBoomerang = false
+        isMine = false
+        ownerWeapon = com.survivortd.game.config.WeaponType.ASSAULT_RIFLE
+    }
+}
 
 /**
  * Pickup data — XP gems, health packs, etc.
@@ -135,7 +151,18 @@ data class PickupComponent(
     var isMagnetized: Boolean = false,
     var lifetime: Float = 30f,
     var pickupType: com.survivortd.game.config.PickupType = com.survivortd.game.config.PickupType.XP_GEM_SMALL
-)
+) {
+    /** Reset to default values for pool reuse. */
+    fun reset() {
+        xpValue = 0
+        goldValue = 0
+        scrapValue = 0
+        healAmount = 0f
+        isMagnetized = false
+        lifetime = 30f
+        pickupType = com.survivortd.game.config.PickupType.XP_GEM_SMALL
+    }
+}
 
 /**
  * Player-specific data.
