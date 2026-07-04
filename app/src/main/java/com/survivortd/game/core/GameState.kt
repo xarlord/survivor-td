@@ -12,17 +12,17 @@ import com.survivortd.game.config.GameConfig
 class GameState {
 
     // === ENTITIES (flat arrays for performance) ===
-    val positions = mutableListOf<PositionComponent>()
-    val velocities = mutableListOf<VelocityComponent>()
-    val renders = mutableListOf<RenderComponent>()
-    val healths = mutableListOf<HealthComponent>()
-    val enemies = mutableListOf<EnemyComponent>()
-    val players = mutableListOf<PlayerComponent>()
-    val projectiles = mutableListOf<ProjectileComponent>()
-    val pickups = mutableListOf<PickupComponent>()
-    val towers = mutableListOf<TowerComponent>()
-    val statusEffects = mutableListOf<StatusEffectsComponent>()
-    val tags = mutableListOf<TagComponent>()
+    val positions = ArrayList<PositionComponent>(GameConfig.MAX_ENTITIES)
+    val velocities = ArrayList<VelocityComponent>(GameConfig.MAX_ENTITIES)
+    val renders = ArrayList<RenderComponent>(GameConfig.MAX_ENTITIES)
+    val healths = ArrayList<HealthComponent>(GameConfig.MAX_ENTITIES)
+    val enemies = ArrayList<EnemyComponent>(GameConfig.MAX_ENTITIES)
+    val players = ArrayList<PlayerComponent>(GameConfig.MAX_ENTITIES)
+    val projectiles = ArrayList<ProjectileComponent>(GameConfig.MAX_ENTITIES)
+    val pickups = ArrayList<PickupComponent>(GameConfig.MAX_ENTITIES)
+    val towers = ArrayList<TowerComponent>(GameConfig.MAX_ENTITIES)
+    val statusEffects = ArrayList<StatusEffectsComponent>(GameConfig.MAX_ENTITIES)
+    val tags = ArrayList<TagComponent>(GameConfig.MAX_ENTITIES)
 
     // === NEXT ENTITY ID ===
     // [#47] Entity IDs ARE array indices — all component lists are parallel.
@@ -76,11 +76,13 @@ class GameState {
 
     /**
      * Returns all entities that should be rendered this frame.
+     * Dead entities are filtered out to prevent ghost rendering.
      */
     val renderableEntities: List<RenderableEntity>
         get() {
             val result = mutableListOf<RenderableEntity>()
             for (i in positions.indices) {
+                if (i >= healths.size || healths[i].isDead) continue
                 if (i < renders.size) {
                     result.add(
                         RenderableEntity(
@@ -136,6 +138,7 @@ class GameState {
         hpScale: Float = 1f,
         damageScale: Float = 1f
     ): Int {
+        if (positions.size >= GameConfig.MAX_ENTITIES) return -1
         val id = nextEntityId()
         positions.add(PositionComponent(x = x, y = y))
         velocities.add(VelocityComponent(maxSpeed = 80f))
@@ -194,6 +197,7 @@ class GameState {
         color: Int = 0xFF42A5F5.toInt(),
         radius: Float = 5f
     ): Int {
+        if (positions.size >= GameConfig.MAX_ENTITIES) return -1
         val id = nextEntityId()
         positions.add(PositionComponent(x = x, y = y))
         velocities.add(VelocityComponent())
@@ -227,6 +231,7 @@ class GameState {
         x: Float,
         y: Float
     ): Int {
+        if (positions.size >= GameConfig.MAX_ENTITIES) return -1
         val id = nextEntityId()
         positions.add(PositionComponent(x = x, y = y))
         velocities.add(VelocityComponent())
@@ -252,11 +257,12 @@ class GameState {
 
     /**
      * Remove all entities marked as dead.
+     * Iterates backwards to avoid index shifting — each removal is O(1).
      */
     fun cleanupDeadEntities() {
-        var i = 0
-        while (i < healths.size) {
-            if (healths[i].isDead) {
+        var i = healths.size - 1
+        while (i >= 0) {
+            if (i < healths.size && healths[i].isDead) {
                 positions.removeAt(i)
                 if (i < velocities.size) velocities.removeAt(i)
                 if (i < renders.size) renders.removeAt(i)
@@ -268,9 +274,8 @@ class GameState {
                 if (i < towers.size) towers.removeAt(i)
                 if (i < statusEffects.size) statusEffects.removeAt(i)
                 if (i < tags.size) tags.removeAt(i)
-            } else {
-                i++
             }
+            i--
         }
     }
 

@@ -130,7 +130,9 @@ class PickupSystem(
             if (pickup.lifetime <= 0f) {
                 pickup.xpValue = 0
                 pickup.goldValue = 0
+                pickup.scrapValue = 0
                 pickup.healAmount = 0f
+                state.healths[i].currentHp = 0f
                 continue
             }
 
@@ -184,6 +186,7 @@ class PickupSystem(
                 pickup.goldValue = 0
                 pickup.scrapValue = 0
                 pickup.healAmount = 0f
+                state.healths[i].currentHp = 0f
             }
         }
     }

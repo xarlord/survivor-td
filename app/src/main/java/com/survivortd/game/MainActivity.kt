@@ -17,9 +17,15 @@ import com.survivortd.game.ui.GameScreen
 import com.survivortd.game.ui.MainMenuScreen
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        @Volatile
+        var skipMenuRequested = false
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        skipMenuRequested = intent.getBooleanExtra("SKIP_MENU", false)
         setContent {
             SurvivorTDApp()
         }
@@ -28,7 +34,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun SurvivorTDApp() {
-    var showGame by remember { mutableStateOf(false) }
+    var showGame by remember { mutableStateOf(MainActivity.skipMenuRequested) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
