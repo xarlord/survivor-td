@@ -2,6 +2,7 @@ package com.survivortd.game.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -85,6 +86,17 @@ fun GameScreen(
     var hudTime by remember { mutableLongStateOf(0L) }
     var hudScore by remember { mutableLongStateOf(0L) }
     var hudGold by remember { mutableIntStateOf(0) }
+
+    // [#94] Pause state
+    var isPaused by remember { mutableStateOf(false) }
+
+    // [#89] Run summary (death screen) state
+    var showRunSummary by remember { mutableStateOf(false) }
+    var summaryKills by remember { mutableIntStateOf(0) }
+    var summaryGold by remember { mutableIntStateOf(0) }
+    var summaryLevel by remember { mutableIntStateOf(1) }
+    var summaryTime by remember { mutableLongStateOf(0L) }
+    var summaryWeapons by remember { mutableIntStateOf(0) }
     var hudFps by remember { mutableIntStateOf(0) }
 
     // [#23] Redraw trigger — increments every frame to force Canvas recomposition.
@@ -167,7 +179,7 @@ fun GameScreen(
     val gameLoop = remember(gameState) {
         GameLoop(
             onUpdate = { dt ->
-                if (gameState.isPaused || gameState.isGameOver) return@GameLoop
+                if (gameState.isPaused || gameState.isGameOver || isPaused) return@GameLoop
                 // Game feel first — returns effective dt (0 during hit-stop)
                 val effectiveDt = gameFeelSystem.update(dt)
                 if (effectiveDt <= 0f) return@GameLoop  // Hit-stop freeze
@@ -251,7 +263,7 @@ fun GameScreen(
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
-        // === LAYER 3: Level-Up Dialog ===
+        // === LAYER 3: Level-Up Dialog (non-blocking, game continues) ===
         if (levelUpChoices.isNotEmpty()) {
             LevelUpDialog(
                 level = hudLevel,
@@ -259,12 +271,72 @@ fun GameScreen(
                 onChoiceSelected = { choice ->
                     levelUpSystem.applyChoice(choice)
                     if (gameState.pendingLevelUps > 0) {
-                        // Another level-up queued — generate new choices
                         levelUpChoices = levelUpSystem.generateChoices()
                     } else {
                         levelUpChoices = emptyList()
-                        gameState.isPaused = false
                     }
+                },
+                onTimeout = { choice ->
+                    levelUpSystem.applyChoice(choice)
+                    if (gameState.pendingLevelUps > 0) {
+                        levelUpChoices = levelUpSystem.generateChoices()
+                    } else {
+                        levelUpChoices = emptyList()
+                    }
+                }
+            )
+        }
+
+        // === LAYER 4: Pause Button (#94) ===
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 16.dp, end = 16.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF333A4D))
+                .testTag("pause_button")
+        ) {
+            Text(
+                text = "⏸",
+                fontSize = 20.sp,
+                modifier = Modifier
+                    .clickable { isPaused = true }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            )
+        }
+
+        // === LAYER 5: Pause Overlay (#94) ===
+        if (isPaused && !showRunSummary) {
+            PauseOverlay(
+                onResume = { isPaused = false },
+                onQuit = {
+                    isPaused = false
+                    onExit()
+                }
+            )
+        }
+
+        // === LAYER 6: Run Summary / Death Screen (#89) ===
+        if (showRunSummary) {
+            RunSummaryScreen(
+                kills = summaryKills,
+                gold = summaryGold,
+                level = summaryLevel,
+                timeSeconds = summaryTime,
+                weapons = summaryWeapons,
+                onPlayAgain = {
+                    showRunSummary = false
+                    gameState.reset()
+                    if (gameState.playerIndex < 0) {
+                        gameState.spawnPlayer()
+                    }
+                    if (weaponSystem.weapons.isEmpty()) {
+                        weaponSystem.addWeapon(WeaponType.ASSAULT_RIFLE)
+                    }
+                },
+                onMenu = {
+                    showRunSummary = false
+                    onExit()
                 }
             )
         }
@@ -284,15 +356,22 @@ fun GameScreen(
             hudTime = (900 - gameState.elapsedSeconds).toLong().coerceAtLeast(0)
             hudScore = gameState.score
 
-            // Check for level-up → generate choices and pause game
+            // Check for level-up → generate choices (game continues, no pause)
             if (gameState.pendingLevelUps > 0 && levelUpChoices.isEmpty()) {
-                gameState.isPaused = true
                 levelUpChoices = levelUpSystem.generateChoices()
             }
 
-            if (gameState.isGameOver) {
-                onGameOver()
-                break
+            // [#89] Game over — capture stats and show run summary
+            if (gameState.isGameOver && !gameState.gameOverHandled) {
+                gameState.gameOverHandled = true
+                summaryKills = gameState.totalKills
+                summaryGold = gameState.goldCollected
+                summaryLevel = hudLevel
+                summaryTime = hudTime
+                summaryWeapons = weaponSystem.weapons.size
+                // Delay 1.5 seconds before showing summary (death processing)
+                delay(1500)
+                showRunSummary = true
             }
             delay(100)
         }
@@ -749,5 +828,169 @@ private fun GameHUD(
             color = Color(0xFF2979FF),
             trackColor = Color(0xFF333A4D)
         )
+    }
+}
+
+/**
+ * [#94] Pause overlay with Resume and Quit options.
+ */
+@Composable
+private fun PauseOverlay(
+    onResume: () -> Unit,
+    onQuit: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth(0.7f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF1E1E2E))
+                .padding(32.dp)
+        ) {
+            Text(
+                text = "PAUSED",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF00E676))
+                    .clickable(onClick = onResume)
+                    .padding(vertical = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "▶  RESUME",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0A0E1A)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFFFF1744))
+                    .clickable(onClick = onQuit)
+                    .padding(vertical = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "✕  QUIT",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
+
+/**
+ * [#89] Run Summary / Death Screen — shows stats after game over.
+ */
+@Composable
+private fun RunSummaryScreen(
+    kills: Int,
+    gold: Int,
+    level: Int,
+    timeSeconds: Long,
+    weapons: Int,
+    onPlayAgain: () -> Unit,
+    onMenu: () -> Unit
+) {
+    val mins = (900 - timeSeconds) / 60
+    val secs = (900 - timeSeconds) % 60
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF1E1E2E))
+                .padding(32.dp)
+        ) {
+            Text(
+                text = "RUN OVER",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFF1744)
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+
+            StatRow("⏱ Time", "%d:%02d".format(mins, secs))
+            StatRow("🏆 Level", "$level")
+            StatRow("💀 Kills", "$kills")
+            StatRow("🪙 Gold", "$gold")
+            StatRow("⚔ Weapons", "$weapons")
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF00E676))
+                    .clickable(onClick = onPlayAgain)
+                    .padding(vertical = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "▶  PLAY AGAIN",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0A0E1A)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF333A4D))
+                    .clickable(onClick = onMenu)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "MENU",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = label, fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f))
+        Text(text = value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
     }
 }
