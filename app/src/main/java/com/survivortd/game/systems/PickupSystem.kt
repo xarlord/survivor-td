@@ -66,6 +66,8 @@ class PickupSystem(
 
     /**
      * Spawn an XP gem at the given position with a small scatter.
+     * [#91] XP gems are blue diamonds, gold drops are gold circles,
+     * health drops are green crosses — each with distinct visuals.
      */
     private fun spawnXpGem(x: Float, y: Float, enemyType: EnemyComponent.EnemyData) {
         val scatterX = (kotlin.random.Random.nextFloat() - 0.5f) * 20f
@@ -102,6 +104,7 @@ class PickupSystem(
             EnemyComponent.EnemyData.BOSS -> 50
         }
 
+        // [#91] Spawn XP gem as diamond shape
         state.spawnPickup(
             x = x + scatterX,
             y = y + scatterY,
@@ -109,8 +112,45 @@ class PickupSystem(
             goldValue = goldValue,
             scrapValue = scrapValue,
             color = gemColor,
-            radius = gemRadius
+            radius = gemRadius,
+            shape = RenderComponent.RenderShape.DIAMOND,
+            pickupType = when (enemyType) {
+                EnemyComponent.EnemyData.ELITE -> com.survivortd.game.config.PickupType.XP_GEM_LARGE
+                EnemyComponent.EnemyData.BOSS -> com.survivortd.game.config.PickupType.XP_GEM_BOSS
+                EnemyComponent.EnemyData.BRUTE,
+                EnemyComponent.EnemyData.SHIELDER,
+                EnemyComponent.EnemyData.SPITTER -> com.survivortd.game.config.PickupType.XP_GEM_MEDIUM
+                else -> com.survivortd.game.config.PickupType.XP_GEM_SMALL
+            }
         )
+
+        // [#91] Spawn gold as separate gold circle entity
+        if (goldValue > 0 && enemyType != EnemyComponent.EnemyData.BOSS) {
+            val goldScatter = (kotlin.random.Random.nextFloat() - 0.5f) * 15f
+            state.spawnPickup(
+                x = x + goldScatter,
+                y = y - 10f + goldScatter,
+                goldValue = goldValue,
+                color = 0xFFFFD700.toInt(),
+                radius = 4f,
+                shape = RenderComponent.RenderShape.CIRCLE,
+                pickupType = com.survivortd.game.config.PickupType.SCRAP
+            )
+        }
+
+        // [#91] Rare health drop (5% from any enemy)
+        if (kotlin.random.Random.nextFloat() < GameConfig.HEALTH_DROP_CHANCE) {
+            val healthScatter = (kotlin.random.Random.nextFloat() - 0.5f) * 15f
+            state.spawnPickup(
+                x = x + healthScatter,
+                y = y + 10f + healthScatter,
+                healAmount = 10f,
+                color = 0xFF00E676.toInt(),
+                radius = 6f,
+                shape = RenderComponent.RenderShape.CROSS,
+                pickupType = com.survivortd.game.config.PickupType.HEALTH_PACK
+            )
+        }
     }
 
     /**

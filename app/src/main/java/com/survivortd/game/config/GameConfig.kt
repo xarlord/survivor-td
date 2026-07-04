@@ -52,10 +52,23 @@ object GameConfig {
     const val GEM_MAGNET_SPEED = 600f      // px/s when in pickup range (2x for faster feel)
     const val GEM_LIFETIME = 30f           // seconds before despawn
 
+    // === PICKUP VISUALS (#91) ===
+    const val HEALTH_DROP_CHANCE = 0.05f   // 5% health drop from any enemy
+    const val PICKUP_PULSE_SPEED = 4f       // Hz for pulse animation
+
     // === MATCH ===
     const val MATCH_DURATION_SECONDS = 900 // 15 minutes
     val BOSS_TIMES_MINUTES = listOf(5, 10, 15)
     const val BUILD_PHASE_DURATION = 10f   // seconds
+
+    // === WAVE PROGRESSION (#97) ===
+    const val WAVE_DURATION_SECONDS = 45f   // Time per wave
+    const val WAVE_PAUSE_SECONDS = 5f      // Brief rest between waves
+    const val BOSS_WAVE_INTERVAL = 5        // Boss every N waves
+    const val WAVE_ENEMY_BASE_COUNT = 10    // Base enemies per wave
+    const val WAVE_ENEMY_SCALE_PER_WAVE = 3 // +N enemies per wave
+    const val WAVE_HP_SCALE_PER_WAVE = 0.08f // +8% HP per wave
+    const val WAVE_ANNOUNCEMENT_DURATION = 2.5f // seconds
 
     // === TOWERS ===
     const val MAX_TOWERS = 8

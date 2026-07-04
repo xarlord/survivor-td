@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.components.RenderComponent
@@ -98,6 +99,10 @@ fun GameScreen(
     var summaryTime by remember { mutableLongStateOf(0L) }
     var summaryWeapons by remember { mutableIntStateOf(0) }
     var hudFps by remember { mutableIntStateOf(0) }
+
+    // [#97] Wave HUD state
+    var hudWave by remember { mutableIntStateOf(0) }
+    var hudWaveText by remember { mutableStateOf("") }
 
     // [#23] Redraw trigger — increments every frame to force Canvas recomposition.
     // Game entity positions are plain Kotlin objects (NOT Compose State), so the
@@ -199,7 +204,8 @@ fun GameScreen(
                 // Particles always update (even during hit-stop for visual continuity)
                 particleSystem.update(dt)
                 gameState.elapsedSeconds += effectiveDt
-                gameState.cleanupDeadEntities()
+                val killed = gameState.cleanupDeadEntities()
+                repeat(killed) { waveSystem.onEnemyKilled() }
             },
             onRender = {
                 // [#23] Trigger Canvas redraw by bumping state on Main thread.
@@ -260,8 +266,29 @@ fun GameScreen(
             score = hudScore,
             gold = hudGold,
             fps = hudFps,
+            wave = hudWave,
+            waveText = hudWaveText,
             modifier = Modifier.align(Alignment.TopCenter)
         )
+
+        // [#97] Wave Announcement Overlay
+        if (gameState.waveAnnouncementTimer > 0f && gameState.waveAnnouncementText.isNotEmpty()) {
+            val isBoss = gameState.waveAnnouncementText.contains("BOSS")
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth(0.8f),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = gameState.waveAnnouncementText,
+                    fontSize = if (isBoss) 28.sp else 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isBoss) Color(0xFFFF1744) else Color(0xFFFFD700),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
 
         // === LAYER 3: Level-Up Dialog (non-blocking, game continues) ===
         if (levelUpChoices.isNotEmpty()) {
@@ -355,6 +382,8 @@ fun GameScreen(
             }
             hudTime = (900 - gameState.elapsedSeconds).toLong().coerceAtLeast(0)
             hudScore = gameState.score
+            hudWave = gameState.currentWave
+            hudWaveText = if (gameState.waveAnnouncementTimer > 0f) gameState.waveAnnouncementText else ""
 
             // Check for level-up → generate choices (game continues, no pause)
             if (gameState.pendingLevelUps > 0 && levelUpChoices.isEmpty()) {
@@ -542,6 +571,62 @@ private fun DrawScope.drawEntities(state: GameState) {
             drawStatusEffectGlow(center, radius, statusEffects[i].effects)
         }
 
+        // [#91] Pulse animation for pickups
+        val isPickup = i < tags.size &&
+            tags[i].tag == com.survivortd.game.components.TagComponent.EntityTag.PICKUP
+        if (isPickup) {
+            val pulse = (kotlin.math.sin(state.elapsedSeconds * GameConfig.PICKUP_PULSE_SPEED) + 1f) * 0.5f
+            val pulsedRadius = radius * (0.85f + pulse * 0.15f)
+            // Use pulsed radius for drawing
+            val drawRadius = pulsedRadius
+            when (render.shape) {
+                RenderComponent.RenderShape.CIRCLE -> {
+                    drawCircle(
+                        color = Color(colorInt.toLong()),
+                        radius = drawRadius,
+                        center = center
+                    )
+                }
+                RenderComponent.RenderShape.RECT -> {
+                    drawRect(
+                        color = Color(colorInt.toLong()),
+                        topLeft = Offset(pos.x - drawRadius, pos.y - drawRadius),
+                        size = Size(drawRadius * 2, drawRadius * 2)
+                    )
+                }
+                RenderComponent.RenderShape.TRIANGLE -> {
+                    triPath.reset()
+                    triPath.moveTo(pos.x, pos.y - drawRadius)
+                    triPath.lineTo(pos.x - drawRadius, pos.y + drawRadius)
+                    triPath.lineTo(pos.x + drawRadius, pos.y + drawRadius)
+                    triPath.close()
+                    drawPath(triPath, color = Color(colorInt.toLong()))
+                }
+                RenderComponent.RenderShape.DIAMOND -> {
+                    diaPath.reset()
+                    diaPath.moveTo(pos.x, pos.y - drawRadius)
+                    diaPath.lineTo(pos.x + drawRadius, pos.y)
+                    diaPath.lineTo(pos.x, pos.y + drawRadius)
+                    diaPath.lineTo(pos.x - drawRadius, pos.y)
+                    diaPath.close()
+                    drawPath(diaPath, color = Color(colorInt.toLong()))
+                }
+                // [#91] CROSS shape for health pickups
+                RenderComponent.RenderShape.CROSS -> {
+                    val armWidth = drawRadius * 0.35f
+                    drawRect(
+                        color = Color(colorInt.toLong()),
+                        topLeft = Offset(pos.x - armWidth, pos.y - drawRadius),
+                        size = Size(armWidth * 2, drawRadius * 2)
+                    )
+                    drawRect(
+                        color = Color(colorInt.toLong()),
+                        topLeft = Offset(pos.x - drawRadius, pos.y - armWidth),
+                        size = Size(drawRadius * 2, armWidth * 2)
+                    )
+                }
+            }
+        } else {
         when (render.shape) {
             RenderComponent.RenderShape.CIRCLE -> {
                 drawCircle(
@@ -574,7 +659,22 @@ private fun DrawScope.drawEntities(state: GameState) {
                 diaPath.close()
                 drawPath(diaPath, color = Color(colorInt.toLong()))
             }
+            // [#91] CROSS shape for health pickups
+            RenderComponent.RenderShape.CROSS -> {
+                val armWidth = radius * 0.35f
+                drawRect(
+                    color = Color(colorInt.toLong()),
+                    topLeft = Offset(pos.x - armWidth, pos.y - radius),
+                    size = Size(armWidth * 2, radius * 2)
+                )
+                drawRect(
+                    color = Color(colorInt.toLong()),
+                    topLeft = Offset(pos.x - radius, pos.y - armWidth),
+                    size = Size(radius * 2, armWidth * 2)
+                )
+            }
         }
+        } // end else
     }
 }
 
@@ -733,6 +833,8 @@ private fun GameHUD(
     score: Long,
     gold: Int,
     fps: Int = 0,
+    wave: Int = 0,
+    waveText: String = "",
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -828,6 +930,22 @@ private fun GameHUD(
             color = Color(0xFF2979FF),
             trackColor = Color(0xFF333A4D)
         )
+
+        // [#97] Wave + Time info row
+        if (wave > 0) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "Wave $wave",
+                    color = Color(0xFF9E9E9E),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
     }
 }
 
