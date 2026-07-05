@@ -182,6 +182,7 @@ class GameState {
         sprites.add(com.survivortd.game.components.SpriteComponent(
             atlasId = SpriteManager.ATLAS_HEROES,
             animState = SpriteManager.ANIM_IDLE,
+            animGroup = "hero_knight",
             frameDuration = SpriteManager.DEFAULT_FRAME_DURATION,
             frameCount = 4
         ))
@@ -266,6 +267,7 @@ class GameState {
         sprites.add(com.survivortd.game.components.SpriteComponent(
             atlasId = SpriteManager.ATLAS_ENEMIES,
             animState = SpriteManager.ANIM_IDLE,
+            animGroup = enemyType.name.lowercase(),
             frameDuration = when (enemyType) {
                 EnemyComponent.EnemyData.BRUTE -> SpriteManager.SLOW_FRAME_DURATION
                 EnemyComponent.EnemyData.RUNNER -> SpriteManager.FAST_FRAME_DURATION
@@ -321,9 +323,17 @@ class GameState {
         statusEffects.add(StatusEffectsComponent())
         tags.add(TagComponent(TagComponent.EntityTag.PICKUP))
         // [#118] Pickups get single-frame sprite from effects atlas
+        val pickupAnimGroup = when (pickupType) {
+            com.survivortd.game.config.PickupType.XP_GEM_SMALL -> "pickup_xp_small"
+            com.survivortd.game.config.PickupType.XP_GEM_MEDIUM -> "pickup_xp_medium"
+            com.survivortd.game.config.PickupType.XP_GEM_LARGE -> "pickup_xp_large"
+            com.survivortd.game.config.PickupType.HEALTH_PACK -> "pickup_health"
+            else -> "pickup_xp_small" // Default fallback
+        }
         sprites.add(com.survivortd.game.components.SpriteComponent(
             atlasId = SpriteManager.ATLAS_EFFECTS,
             animState = SpriteManager.ANIM_IDLE,
+            animGroup = pickupAnimGroup,
             frameDuration = 0f,
             frameCount = 1
         ))
@@ -365,6 +375,7 @@ class GameState {
         sprites.add(com.survivortd.game.components.SpriteComponent(
             atlasId = SpriteManager.ATLAS_EFFECTS,
             animState = SpriteManager.ANIM_IDLE,
+            animGroup = "proj_bullet",
             frameDuration = 0f,
             frameCount = 1
         ))
