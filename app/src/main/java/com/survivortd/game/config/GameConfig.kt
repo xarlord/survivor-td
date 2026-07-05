@@ -109,4 +109,13 @@ object GameConfig {
     fun armorReduction(damage: Float, armor: Float): Float {
         return (damage - armor).coerceAtLeast(0f)
     }
+
+    // === MINIMAP (#98) ===
+    const val MINIMAP_SIZE_DP = 80f
+    const val MINIMAP_MARGIN_DP = 12f
+    const val MINIMAP_ALPHA = 0.6f
+    const val MINIMAP_DOT_RADIUS = 2.5f
+    const val MINIMAP_VIEWPORT_ALPHA = 0.4f
+    const val OFFSCREEN_INDICATOR_SIZE = 8f
+    const val OFFSCREEN_INDICATOR_RANGE = 2f
 }

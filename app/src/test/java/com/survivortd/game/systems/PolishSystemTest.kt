@@ -1,6 +1,8 @@
 package com.survivortd.game.systems
 
+import com.survivortd.game.config.GameConfig
 import com.survivortd.game.core.GameState
+import com.survivortd.game.data.SaveManager
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -220,6 +222,220 @@ class PolishSystemTest {
             assertFalse(audio.isHapticsEnabled())
             audio.setHaptics(true)
             assertTrue(audio.isHapticsEnabled())
+        }
+    }
+
+    @Nested
+    @DisplayName("Meta-Progression UpgradeItem (#92)")
+    inner class MetaProgressionTest {
+
+        @Test
+        @DisplayName("All upgrade items have non-empty display names")
+        fun upgradeItemsHaveNames() {
+            for (item in MetaProgression.UpgradeItem.entries) {
+                assertTrue(item.displayName.isNotEmpty(),
+                    "${item.name} should have a non-empty display name")
+                assertTrue(item.description.isNotEmpty(),
+                    "${item.name} should have a non-empty description")
+            }
+        }
+
+        @Test
+        @DisplayName("All upgrade items have positive base cost")
+        fun upgradeItemsHavePositiveCost() {
+            for (item in MetaProgression.UpgradeItem.entries) {
+                assertTrue(item.baseCost > 0,
+                    "${item.name} should have positive base cost")
+            }
+        }
+
+        @Test
+        @DisplayName("All upgrade items have max level >= 1")
+        fun upgradeItemsHaveMaxLevel() {
+            for (item in MetaProgression.UpgradeItem.entries) {
+                assertTrue(item.maxLevel >= 1,
+                    "${item.name} should have max level >= 1")
+            }
+        }
+
+        @Test
+        @DisplayName("Current level returns 0 for fresh meta")
+        fun freshMetaHasZeroLevels() {
+            val meta = MetaProgression()
+            for (item in MetaProgression.UpgradeItem.entries) {
+                assertEquals(0, item.currentLevel(meta),
+                    "${item.name} should be 0 on fresh meta")
+            }
+        }
+
+        @Test
+        @DisplayName("isMaxed returns false for fresh meta")
+        fun freshMetaNotMaxed() {
+            val meta = MetaProgression()
+            for (item in MetaProgression.UpgradeItem.entries) {
+                assertFalse(item.isMaxed(meta),
+                    "${item.name} should not be maxed on fresh meta")
+            }
+        }
+
+        @Test
+        @DisplayName("Cost is baseCost at level 0")
+        fun costAtLevelZero() {
+            val meta = MetaProgression()
+            for (item in MetaProgression.UpgradeItem.entries) {
+                assertEquals(item.baseCost, item.cost(meta),
+                    "${item.name} cost should equal baseCost at level 0")
+            }
+        }
+
+        @Test
+        @DisplayName("Cost doubles each level")
+        fun costDoublesEachLevel() {
+            for (item in MetaProgression.UpgradeItem.entries) {
+                val level0Cost = item.baseCost
+                // Simulate buying 1 level
+                val meta = MetaProgression()
+                meta.gold = 100000
+                meta.buy(item)
+                assertEquals(level0Cost * 2, item.cost(meta),
+                    "${item.name} cost should double after 1 purchase")
+            }
+        }
+
+        @Test
+        @DisplayName("Generic buy delegates to correct method")
+        fun buyDelegatesCorrectly() {
+            val meta = MetaProgression()
+            meta.gold = 100000
+            assertTrue(meta.buy(MetaProgression.UpgradeItem.MAX_HP))
+            assertEquals(1, meta.maxHpLevel)
+
+            assertTrue(meta.buy(MetaProgression.UpgradeItem.DAMAGE))
+            assertEquals(1, meta.damageLevel)
+
+            assertTrue(meta.buy(MetaProgression.UpgradeItem.EXTRA_LIFE))
+            assertEquals(1, meta.extraLifeLevel)
+        }
+
+        @Test
+        @DisplayName("Buy fails when gold insufficient")
+        fun buyFailsNoGold() {
+            val meta = MetaProgression()
+            meta.gold = 0
+            assertFalse(meta.buy(MetaProgression.UpgradeItem.MAX_HP))
+            assertEquals(0, meta.maxHpLevel)
+        }
+
+        @Test
+        @DisplayName("Buy fails when already maxed")
+        fun buyFailsWhenMaxed() {
+            val meta = MetaProgression()
+            meta.gold = 999999
+            // Max out MOVE_SPEED (max 5, cheaper)
+            repeat(5) { meta.buy(MetaProgression.UpgradeItem.MOVE_SPEED) }
+            assertEquals(5, meta.moveSpeedLevel)
+            assertTrue(MetaProgression.UpgradeItem.MOVE_SPEED.isMaxed(meta))
+            assertFalse(meta.buy(MetaProgression.UpgradeItem.MOVE_SPEED))
+        }
+
+        @Test
+        @DisplayName("applyToGameState increases player HP with maxHpLevel")
+        fun applyToGameStateIncreasesHp() {
+            val state = GameState()
+            state.spawnPlayer()
+            val meta = MetaProgression()
+            meta.maxHpLevel = 3  // +60 HP
+            MetaProgression.applyToGameState(meta, state)
+            val hp = state.healths[state.playerIndex]
+            assertEquals(160f, hp.maxHp, 0.01f)
+            assertEquals(160f, hp.currentHp, 0.01f)
+        }
+
+        @Test
+        @DisplayName("applyToGameState increases move speed")
+        fun applyToGameStateIncreasesSpeed() {
+            val state = GameState()
+            state.spawnPlayer()
+            val player = state.players[state.playerIndex]
+            val speedBefore = player.moveSpeed
+            val meta = MetaProgression()
+            meta.moveSpeedLevel = 2  // +20 px/s
+            MetaProgression.applyToGameState(meta, state)
+            assertEquals(speedBefore + 20f, player.moveSpeed, 0.01f)
+        }
+    }
+
+    @Nested
+    @DisplayName("SaveManager GameSettings (#92/#95)")
+    inner class SaveManagerTest {
+
+        @Test
+        @DisplayName("Default GameSettings values")
+        fun defaultSettings() {
+            val settings = SaveManager.GameSettings()
+            assertEquals(0.8f, settings.sfxVolume, 0.001f)
+            assertEquals(0.6f, settings.bgmVolume, 0.001f)
+            assertTrue(settings.minimapVisible)
+            assertTrue(settings.hapticsEnabled)
+            assertTrue(settings.isFirstRun)
+        }
+
+        @Test
+        @DisplayName("GameSettings is a data class — equality works")
+        fun settingsEquality() {
+            val a = SaveManager.GameSettings(sfxVolume = 0.5f, isFirstRun = false)
+            val b = SaveManager.GameSettings(sfxVolume = 0.5f, isFirstRun = false)
+            assertEquals(a, b)
+        }
+    }
+
+    @Nested
+    @DisplayName("Minimap Constants (#98)")
+    inner class MinimapConfigTest {
+
+        @Test
+        @DisplayName("Minimap size is positive")
+        fun minimapSizePositive() {
+            assertTrue(GameConfig.MINIMAP_SIZE_DP > 0f)
+        }
+
+        @Test
+        @DisplayName("Minimap margin is positive")
+        fun minimapMarginPositive() {
+            assertTrue(GameConfig.MINIMAP_MARGIN_DP > 0f)
+        }
+
+        @Test
+        @DisplayName("Minimap alpha is in valid range")
+        fun minimapAlphaInRange() {
+            assertTrue(GameConfig.MINIMAP_ALPHA > 0f && GameConfig.MINIMAP_ALPHA <= 1f)
+        }
+
+        @Test
+        @DisplayName("Minimap dot radius is positive")
+        fun minimapDotRadiusPositive() {
+            assertTrue(GameConfig.MINIMAP_DOT_RADIUS > 0f)
+        }
+
+        @Test
+        @DisplayName("Minimap viewport alpha is in valid range")
+        fun minimapViewportAlphaInRange() {
+            assertTrue(GameConfig.MINIMAP_VIEWPORT_ALPHA > 0f &&
+                GameConfig.MINIMAP_VIEWPORT_ALPHA <= 1f)
+        }
+
+        @Test
+        @DisplayName("Off-screen indicator size is positive")
+        fun offscreenIndicatorSizePositive() {
+            assertTrue(GameConfig.OFFSCREEN_INDICATOR_SIZE > 0f)
+        }
+
+        @Test
+        @DisplayName("Minimap fits within reasonable screen bounds")
+        fun minimapFitsScreen() {
+            // Minimap + margin should fit within a typical phone width
+            val total = GameConfig.MINIMAP_SIZE_DP + GameConfig.MINIMAP_MARGIN_DP * 2
+            assertTrue(total < 200f, "Minimap total space should be < 200dp")
         }
     }
 }

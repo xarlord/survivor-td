@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,14 +44,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.components.RenderComponent
+import com.survivortd.game.components.TagComponent
 import com.survivortd.game.config.GameConfig
 import com.survivortd.game.config.WeaponType
 import com.survivortd.game.data.HeroId
 import com.survivortd.game.core.GameState
 import com.survivortd.game.core.GameLoop
 import androidx.compose.ui.platform.LocalContext
+import com.survivortd.game.data.SaveManager
 import com.survivortd.game.systems.AudioManager
 import com.survivortd.game.systems.LevelUpSystem
+import com.survivortd.game.systems.MetaProgression
 import com.survivortd.game.systems.UpgradeChoice
 import com.survivortd.game.systems.VirtualJoystick
 import com.survivortd.game.systems.WeaponSystem
@@ -59,6 +63,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -116,6 +121,13 @@ fun GameScreen(
     // [#97] Wave HUD state
     var hudWave by remember { mutableIntStateOf(0) }
     var hudWaveText by remember { mutableStateOf("") }
+
+    // [#95] Tutorial state
+    var showTutorial by remember { mutableStateOf(false) }
+
+    // [#92] Meta-progression
+    val metaProgression = remember { mutableStateOf(MetaProgression()) }
+    val context = LocalContext.current
 
     // [#23] Redraw trigger — increments every frame to force Canvas recomposition.
     // Game entity positions are plain Kotlin objects (NOT Compose State), so the
@@ -178,7 +190,6 @@ fun GameScreen(
     }
 
     // [#113] Initialize AudioManager with preloaded SFX
-    val context = LocalContext.current
     val audioManager = remember(context) {
         AudioManager.getInstance(context).also {
             AudioManager.SfxType.entries.forEach { sfx -> it.loadSfx(sfx) }
@@ -260,6 +271,16 @@ fun GameScreen(
     remember(gameLoop) {
         gameLoop.start(gameLoopScope)
         true
+    }
+
+    // [#92] Load meta-progression and apply bonuses at game start
+    LaunchedEffect(Unit) {
+        val meta = SaveManager.loadMeta(context).first()
+        metaProgression.value = meta
+        MetaProgression.applyToGameState(meta, gameState)
+        // [#95] Check first-run tutorial
+        val settings = SaveManager.loadSettings(context).first()
+        showTutorial = settings.isFirstRun
     }
 
     DisposableEffect(Unit) {
@@ -408,6 +429,27 @@ fun GameScreen(
                 }
             )
         }
+
+        // === LAYER 7: Minimap (#98) ===
+        MinimapView(
+            gameState = gameState,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    end = GameConfig.MINIMAP_MARGIN_DP.dp,
+                    bottom = GameConfig.MINIMAP_MARGIN_DP.dp
+                )
+        )
+
+        // === LAYER 8: Tutorial Overlay (#95) ===
+        if (showTutorial) {
+            TutorialOverlay(onDismiss = {
+                showTutorial = false
+                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                    SaveManager.markFirstRunComplete(context)
+                }
+            })
+        }
     }
 
     // Update HUD values at 10Hz (every 100ms) — NOT every frame
@@ -456,6 +498,11 @@ fun GameScreen(
                     summaryLevel = hudLevel
                     summaryTime = hudTime
                     summaryWeapons = weaponSystem.weapons.size
+                    // [#92] Save gold to meta-progression
+                    val currentMeta = metaProgression.value
+                    currentMeta.addGold(gameState.goldCollected)
+                    SaveManager.saveMeta(context, currentMeta)
+                    metaProgression.value = currentMeta
                     // Delay 1.5 seconds before showing summary (death processing)
                     delay(1500)
                     showRunSummary = true
@@ -1177,5 +1224,84 @@ private fun StatRow(label: String, value: String) {
     ) {
         Text(text = label, fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f))
         Text(text = value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+    }
+}
+
+/**
+ * [#98] Minimap — shows a scaled-down view of the world with entity dots.
+ * Player = blue, enemies = red, boss = gold, towers = green.
+ * Viewport rectangle shows the current camera view area.
+ */
+@Composable
+private fun MinimapView(
+    gameState: GameState,
+    modifier: Modifier = Modifier
+) {
+    Canvas(
+        modifier = modifier
+            .size(GameConfig.MINIMAP_SIZE_DP.dp)
+    ) {
+        val worldW = GameConfig.WORLD_WIDTH
+        val worldH = GameConfig.WORLD_HEIGHT
+        val mapSize = size.width
+        val scaleX = mapSize / worldW
+        val scaleY = mapSize / worldH
+        val scale = minOf(scaleX, scaleY)
+        val offsetX = (mapSize - worldW * scale) / 2f
+        val offsetY = (mapSize - worldH * scale) / 2f
+
+        // Background
+        drawCircle(
+            color = Color(0xFF0A0E1A).copy(alpha = GameConfig.MINIMAP_ALPHA),
+            radius = mapSize / 2f,
+            center = center
+        )
+        // Border
+        drawCircle(
+            color = Color(0xFF333A4D),
+            radius = mapSize / 2f,
+            center = center,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
+        )
+
+        // Entity dots
+        val positions = gameState.positions
+        val healths = gameState.healths
+        val tags = gameState.tags
+        val renders = gameState.renders
+
+        for (i in positions.indices) {
+            if (i >= healths.size || healths[i].isDead) continue
+            if (i >= tags.size) continue
+
+            val x = positions[i].x * scale + offsetX
+            val y = positions[i].y * scale + offsetY
+            val color = when (tags[i].tag) {
+                TagComponent.EntityTag.PLAYER -> Color(0xFF42A5F5)
+                TagComponent.EntityTag.ENEMY -> {
+                    // Boss check: large radius
+                    val isBoss = i < renders.size && renders[i].radius > 30f
+                    if (isBoss) Color(0xFFFFD700) else Color(0xFFFF1744)
+                }
+                TagComponent.EntityTag.TOWER -> Color(0xFF00E676)
+                else -> continue
+            }
+            drawCircle(
+                color = color,
+                radius = GameConfig.MINIMAP_DOT_RADIUS,
+                center = Offset(x, y)
+            )
+        }
+
+        // Viewport rectangle (camera area)
+        val camX = gameState.cameraX * scale + offsetX
+        val camY = gameState.cameraY * scale + offsetY
+        val vpW = GameConfig.CAMERA_WIDTH * scale
+        val vpH = GameConfig.CAMERA_HEIGHT * scale
+        drawRect(
+            color = Color.White.copy(alpha = GameConfig.MINIMAP_VIEWPORT_ALPHA),
+            topLeft = Offset(camX - vpW / 2f, camY - vpH / 2f),
+            size = androidx.compose.ui.geometry.Size(vpW, vpH)
+        )
     }
 }
