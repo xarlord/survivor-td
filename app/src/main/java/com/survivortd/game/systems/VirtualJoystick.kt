@@ -26,6 +26,20 @@ class VirtualJoystick(
     private var anchorY: Float = -1f
     private var isActive: Boolean = false
 
+    // Dash double-tap detection
+    private var lastTapTime = 0L
+    private val DASH_DOUBLE_TAP_MS = 300L
+
+    fun checkDash(): Boolean {
+        val now = System.currentTimeMillis()
+        if (lastTapTime > 0L && now - lastTapTime < DASH_DOUBLE_TAP_MS) {
+            lastTapTime = 0L
+            return true
+        }
+        lastTapTime = now
+        return false
+    }
+
     /**
      * Process a touch input event.
      * Call from GameLoop's handleInput callback.

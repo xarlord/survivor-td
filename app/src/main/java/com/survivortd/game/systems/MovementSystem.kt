@@ -16,7 +16,8 @@ import kotlin.math.sqrt
  * Enemies: chase the player (seek steering behavior).
  */
 class MovementSystem(
-    private val state: GameState
+    private val state: GameState,
+    private val joystick: VirtualJoystick? = null
 ) {
     /**
      * Called every physics tick.
@@ -39,6 +40,15 @@ class MovementSystem(
     private fun updatePlayer(dt: Float) {
         val pos = state.positions[state.playerIndex]
         val player = state.players.getOrElse(state.playerIndex) { return }
+
+        // Check for dash trigger via double-tap
+        if (joystick != null && joystick.active()) {
+            if (joystick.checkDash() && !player.isDashing && player.dashCooldownTimer <= 0f) {
+                player.isDashing = true
+                player.dashTimer = GameConfig.PLAYER_DASH_DURATION
+                player.dashCooldownTimer = GameConfig.PLAYER_DASH_COOLDOWN
+            }
+        }
 
         val jx = state.joystickX
         val jy = state.joystickY
@@ -67,7 +77,7 @@ class MovementSystem(
                 player.isDashing = false
             }
         } else {
-            player.dashCooldown = (player.dashCooldown - dt).coerceAtLeast(0f)
+            player.dashCooldownTimer = (player.dashCooldownTimer - dt).coerceAtLeast(0f)
         }
 
         // Update health percent for HUD
