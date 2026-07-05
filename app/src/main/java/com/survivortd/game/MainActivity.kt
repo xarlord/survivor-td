@@ -65,9 +65,17 @@ fun SurvivorTDApp() {
         playerGold = meta.gold
     }
 
+    // Reload meta-progression whenever returning to a screen (re-reads JSON)
+    fun refreshMeta() {
+        val meta = MetaProgression.load(getMetaProgressionPath(context))
+        playerGold = meta.gold
+    }
+
     SurvivorTDTheme {
         NavHost(navController = navController, startDestination = Screen.MENU.name) {
             composable(Screen.MENU.name) {
+                // Refresh gold from JSON every time menu is composed
+                LaunchedEffect(Unit) { refreshMeta() }
                 MainMenuScreen(
                     gold = playerGold,
                     onPlay = { navController.navigate(Screen.GAME.name) },
@@ -101,10 +109,22 @@ fun SurvivorTDApp() {
                 )
             }
             composable(Screen.SHOP.name) {
-                val meta = rememberLoadMetaProgression()
+                val shopMeta = remember { mutableStateOf(MetaProgression.load(getMetaProgressionPath(context))) }
+                LaunchedEffect(Unit) {
+                    refreshMeta()
+                    shopMeta.value = MetaProgression.load(getMetaProgressionPath(context))
+                }
+                LaunchedEffect(shopMeta.value) {
+                    playerGold = shopMeta.value.gold
+                }
                 ShopScreen(
-                    meta = meta,
-                    onBuy = { },
+                    meta = shopMeta.value,
+                    onBuy = { item ->
+                        if (shopMeta.value.buy(item)) {
+                            shopMeta.value.save(getMetaProgressionPath(context))
+                            playerGold = shopMeta.value.gold
+                        }
+                    },
                     onBack = { navController.popBackStack() }
                 )
             }

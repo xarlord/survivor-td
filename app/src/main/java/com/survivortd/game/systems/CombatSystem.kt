@@ -17,7 +17,7 @@ import kotlin.math.sqrt
 class CombatSystem(
     private val state: GameState,
     private val gameFeelSystem: GameFeelSystem? = null,
-    private val meta: MetaProgression? = null
+    var meta: MetaProgression? = null
 ) {
     /**
      * Process combat for this tick.
@@ -127,8 +127,9 @@ class CombatSystem(
                 if (health.isDead) {
                     // Check for extra lives from MetaProgression
                     val player = state.players.getOrNull(state.playerIndex)
-                    if (meta != null && meta.extraLifeLevel > 0 && player != null && !player.hasRevived) {
-                        meta.extraLifeLevel--
+                    val currentMeta = meta
+                    if (currentMeta != null && currentMeta.extraLifeLevel > 0 && player != null && !player.hasRevived) {
+                        currentMeta.extraLifeLevel--
                         health.currentHp = health.maxHp * 0.5f
                         player.hasRevived = true
                         health.invincible = true

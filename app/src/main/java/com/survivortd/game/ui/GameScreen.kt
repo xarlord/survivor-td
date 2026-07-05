@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.setValue
@@ -53,6 +54,7 @@ import com.survivortd.game.core.GameLoop
 import androidx.compose.ui.platform.LocalContext
 import com.survivortd.game.data.SaveManager
 import com.survivortd.game.systems.AudioManager
+import com.survivortd.game.systems.CombatSystem
 import com.survivortd.game.systems.LevelUpSystem
 import com.survivortd.game.systems.MetaProgression
 import com.survivortd.game.systems.UpgradeChoice
@@ -65,6 +67,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * Root game screen. Manages the strict rendering layer hierarchy:
@@ -128,6 +131,7 @@ fun GameScreen(
     // [#92] Meta-progression
     val metaProgression = remember { mutableStateOf(MetaProgression()) }
     val context = LocalContext.current
+    val metaPath = remember { context.filesDir.resolve("meta_progression.json").absolutePath }
 
     // [#23] Redraw trigger — increments every frame to force Canvas recomposition.
     // Game entity positions are plain Kotlin objects (NOT Compose State), so the
@@ -168,8 +172,8 @@ fun GameScreen(
     // Create ALL game systems
     val particleSystem = remember { com.survivortd.game.systems.ParticleSystem(gameState) }
     val gameFeelSystem = remember { com.survivortd.game.systems.GameFeelSystem() }
+    val combatSystem = remember { CombatSystem(gameState, gameFeelSystem, metaProgression.value) }
     val movementSystem = remember { com.survivortd.game.systems.MovementSystem(gameState) }
-    val combatSystem = remember { com.survivortd.game.systems.CombatSystem(gameState, gameFeelSystem, com.survivortd.game.systems.MetaProgression()) }
     val enemyAiSystem = remember { com.survivortd.game.systems.EnemyAISystem(gameState) }
     val pickupSystem = remember { com.survivortd.game.systems.PickupSystem(gameState, particleSystem) }
     val projectileSystem = remember {
@@ -275,8 +279,9 @@ fun GameScreen(
 
     // [#92] Load meta-progression and apply bonuses at game start
     LaunchedEffect(Unit) {
-        val meta = SaveManager.loadMeta(context).first()
+        val meta = MetaProgression.load(metaPath)
         metaProgression.value = meta
+        combatSystem.meta = meta
         MetaProgression.applyToGameState(meta, gameState)
         // [#95] Check first-run tutorial
         val settings = SaveManager.loadSettings(context).first()
@@ -422,6 +427,9 @@ fun GameScreen(
                     if (weaponSystem.weapons.isEmpty()) {
                         weaponSystem.addWeapon(hero.startingWeapon)
                     }
+                    // Re-apply meta-progression bonuses
+                    MetaProgression.applyToGameState(metaProgression.value, gameState)
+                    combatSystem.meta = metaProgression.value
                 },
                 onMenu = {
                     showRunSummary = false
@@ -443,9 +451,10 @@ fun GameScreen(
 
         // === LAYER 8: Tutorial Overlay (#95) ===
         if (showTutorial) {
+            val rememberScope = rememberCoroutineScope()
             TutorialOverlay(onDismiss = {
                 showTutorial = false
-                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                rememberScope.launch(Dispatchers.IO) {
                     SaveManager.markFirstRunComplete(context)
                 }
             })
@@ -484,6 +493,11 @@ fun GameScreen(
                 summaryTime = 0L
                 summaryWeapons = weaponSystem.weapons.size
                 summaryIsVictory = true
+                // Save gold to meta-progression (JSON)
+                val currentMeta = metaProgression.value
+                currentMeta.addGold(gameState.goldCollected + GameConfig.GOLD_COMPLETION_BONUS)
+                currentMeta.save(metaPath)
+                metaProgression.value = currentMeta
                 delay(1000)
                 showRunSummary = true
             }
@@ -498,10 +512,10 @@ fun GameScreen(
                     summaryLevel = hudLevel
                     summaryTime = hudTime
                     summaryWeapons = weaponSystem.weapons.size
-                    // [#92] Save gold to meta-progression
+                    // [#92] Save gold to meta-progression (JSON)
                     val currentMeta = metaProgression.value
                     currentMeta.addGold(gameState.goldCollected)
-                    SaveManager.saveMeta(context, currentMeta)
+                    currentMeta.save(metaPath)
                     metaProgression.value = currentMeta
                     // Delay 1.5 seconds before showing summary (death processing)
                     delay(1500)

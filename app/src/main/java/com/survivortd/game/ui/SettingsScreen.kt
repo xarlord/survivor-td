@@ -1,6 +1,7 @@
 package com.survivortd.game.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -24,9 +26,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.survivortd.game.data.SaveManager
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -36,6 +42,30 @@ fun SettingsScreen(
     var bgmVolume by rememberSaveable { mutableFloatStateOf(1f) }
     var hapticsEnabled by rememberSaveable { mutableStateOf(true) }
     var minimapEnabled by rememberSaveable { mutableStateOf(true) }
+    val context = LocalContext.current
+
+    // Load persisted settings on first composition
+    LaunchedEffect(Unit) {
+        val settings = SaveManager.loadSettings(context).first()
+        sfxVolume = settings.sfxVolume
+        bgmVolume = settings.bgmVolume
+        hapticsEnabled = settings.hapticsEnabled
+        minimapEnabled = settings.minimapVisible
+    }
+
+    // Save settings whenever they change
+    LaunchedEffect(sfxVolume, bgmVolume, hapticsEnabled, minimapEnabled) {
+        SaveManager.saveSettings(
+            context,
+            SaveManager.GameSettings(
+                sfxVolume = sfxVolume,
+                bgmVolume = bgmVolume,
+                minimapVisible = minimapEnabled,
+                hapticsEnabled = hapticsEnabled,
+                isFirstRun = false
+            )
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -55,6 +85,7 @@ fun SettingsScreen(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(Color(0xFF333A4D))
+                        .clickable(onClick = onBack)
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text(
