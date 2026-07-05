@@ -27,7 +27,13 @@ class GameState {
     val towers = ArrayList<TowerComponent>(GameConfig.MAX_ENTITIES)
     val statusEffects = ArrayList<StatusEffectsComponent>(GameConfig.MAX_ENTITIES)
     val tags = ArrayList<TagComponent>(GameConfig.MAX_ENTITIES)
+    val sprites = ArrayList<com.survivortd.game.components.SpriteComponent>(GameConfig.MAX_ENTITIES)
     val damageNumbers = ArrayList<com.survivortd.game.components.DamageNumberComponent>(200)
+
+    // [#118] Sprite manager — @Volatile for cross-thread visibility (AGY review).
+    // Set once on IO dispatcher, read from game loop on Dispatchers.Default.
+    @Volatile
+    var spriteManager: SpriteManager? = null
 
     // === OBJECT POOLS (#115) — reduce GC pressure from frequent create/destroy ===
     val projectilePool = ObjectPool(
@@ -173,6 +179,12 @@ class GameState {
         towers.add(TowerComponent())  // Placeholder
         statusEffects.add(StatusEffectsComponent())
         tags.add(TagComponent(TagComponent.EntityTag.PLAYER))
+        sprites.add(com.survivortd.game.components.SpriteComponent(
+            atlasId = SpriteManager.ATLAS_HEROES,
+            animState = SpriteManager.ANIM_IDLE,
+            frameDuration = SpriteManager.DEFAULT_FRAME_DURATION,
+            frameCount = 4
+        ))
         playerIndex = id
         return id
     }
@@ -250,6 +262,20 @@ class GameState {
         towers.add(TowerComponent())  // Placeholder
         statusEffects.add(StatusEffectsComponent())
         tags.add(TagComponent(TagComponent.EntityTag.ENEMY))
+        // [#118] Sprite animation data per enemy type
+        sprites.add(com.survivortd.game.components.SpriteComponent(
+            atlasId = SpriteManager.ATLAS_ENEMIES,
+            animState = SpriteManager.ANIM_IDLE,
+            frameDuration = when (enemyType) {
+                EnemyComponent.EnemyData.BRUTE -> SpriteManager.SLOW_FRAME_DURATION
+                EnemyComponent.EnemyData.RUNNER -> SpriteManager.FAST_FRAME_DURATION
+                else -> SpriteManager.DEFAULT_FRAME_DURATION
+            },
+            frameCount = when (enemyType) {
+                EnemyComponent.EnemyData.BRUTE -> 2
+                else -> 4
+            }
+        ))
         activeEnemyCount++
         return id
     }
@@ -294,6 +320,13 @@ class GameState {
         towers.add(TowerComponent())    // Placeholder
         statusEffects.add(StatusEffectsComponent())
         tags.add(TagComponent(TagComponent.EntityTag.PICKUP))
+        // [#118] Pickups get single-frame sprite from effects atlas
+        sprites.add(com.survivortd.game.components.SpriteComponent(
+            atlasId = SpriteManager.ATLAS_EFFECTS,
+            animState = SpriteManager.ANIM_IDLE,
+            frameDuration = 0f,
+            frameCount = 1
+        ))
         activePickupCount++
         return id
     }
@@ -328,6 +361,13 @@ class GameState {
         towers.add(TowerComponent())    // Placeholder
         statusEffects.add(StatusEffectsComponent())
         tags.add(TagComponent(TagComponent.EntityTag.PROJECTILE))
+        // [#118] Projectiles get single-frame sprite from effects atlas
+        sprites.add(com.survivortd.game.components.SpriteComponent(
+            atlasId = SpriteManager.ATLAS_EFFECTS,
+            animState = SpriteManager.ANIM_IDLE,
+            frameDuration = 0f,
+            frameCount = 1
+        ))
         activeProjectileCount++
         return id
     }
@@ -374,6 +414,7 @@ class GameState {
                 if (i < towers.size) towers.removeAt(i)
                 if (i < statusEffects.size) statusEffects.removeAt(i)
                 if (i < tags.size) tags.removeAt(i)
+                if (i < sprites.size) sprites.removeAt(i)
             }
             i--
         }
@@ -399,6 +440,7 @@ class GameState {
         towers.clear()
         statusEffects.clear()  // [#47] was missing — kept arrays out of sync after reset
         tags.clear()
+        sprites.clear()
         damageNumbers.clear()
         activeEnemyCount = 0
         activeProjectileCount = 0

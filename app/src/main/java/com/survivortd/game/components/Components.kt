@@ -231,6 +231,26 @@ data class TowerComponent(
     enum class TowerData { GUN_TURRET, CANNON, FROST_TOWER, TESLA_COIL, POISON_TOWER, ROCKET_POD }
 }
 
+/**
+ * Sprite animation component — links entity to texture atlas frame.
+ * [#118] When atlasId == -1, entity falls back to RenderComponent shape drawing.
+ *
+ * Design (AGY review): Integer-indexed frame lookups instead of string keys
+ * to avoid GC pressure in the 60Hz draw loop.
+ */
+data class SpriteComponent(
+    var atlasId: Int = -1,           // SpriteManager.ATLAS_HEROES, ATLAS_ENEMIES, etc. -1 = fallback
+    var animState: Int = 0,          // SpriteManager.ANIM_IDLE, ANIM_WALK, etc.
+    var frameIndex: Int = 0,         // Current frame in animation sequence
+    var animTimer: Float = 0f,       // Time accumulator for current frame
+    var frameDuration: Float = 0.15f,// Seconds per frame (0 = static/single frame)
+    var frameCount: Int = 1,          // Total frames in current animation
+    var facingLeft: Boolean = false   // Horizontal flip for directional sprites
+) {
+    /** Whether this entity has a valid sprite to render. */
+    val hasSprite: Boolean get() = atlasId >= 0
+}
+
 data class DamageNumberComponent(
     var x: Float = 0f,
     var y: Float = 0f,
