@@ -241,6 +241,7 @@ data class TowerComponent(
 data class SpriteComponent(
     var atlasId: Int = -1,           // SpriteManager.ATLAS_HEROES, ATLAS_ENEMIES, etc. -1 = fallback
     var animState: Int = 0,          // SpriteManager.ANIM_IDLE, ANIM_WALK, etc.
+    var animGroup: String = "",      // Animation group name (e.g. "zombie", "runner", "proj_bullet")
     var frameIndex: Int = 0,         // Current frame in animation sequence
     var animTimer: Float = 0f,       // Time accumulator for current frame
     var frameDuration: Float = 0.15f,// Seconds per frame (0 = static/single frame)

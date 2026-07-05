@@ -3,8 +3,6 @@ package com.survivortd.game.core
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Rect
-import android.os.Build
-import android.view.View
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import org.json.JSONObject
@@ -20,11 +18,6 @@ import java.io.IOException
  * - All loading on IO dispatcher via suspend fun loadAll()
  */
 class SpriteManager(private val context: Context) {
-
-    // [#118] AGY review: detect edit/preview mode to avoid HARDWARE bitmap crashes
-    private val isSoftwareContext: Boolean = run {
-        try { View(context).isInEditMode } catch (_: Exception) { false }
-    }
 
     /**
      * A single frame region on a texture atlas.
@@ -47,16 +40,18 @@ class SpriteManager(private val context: Context) {
     }
 
     /**
-     * A loaded texture atlas with its animations indexed by animStateId.
+     * A loaded texture atlas with its animations indexed by "group_state" key
+     * (e.g. "zombie_0" for zombie idle, "zombie_1" for zombie walk).
      */
     class SpriteSheet(
         val bitmap: ImageBitmap?,
-        val animations: Map<Int, SpriteAnim>
+        val animations: Map<String, SpriteAnim>
     ) {
-        fun getAnim(animStateId: Int): SpriteAnim? = animations[animStateId]
+        fun getAnim(group: String, animStateId: Int): SpriteAnim? =
+            animations[group + "_" + animStateId]
 
-        fun getFrame(animStateId: Int, frameIndex: Int): SpriteFrame? {
-            val anim = animations[animStateId] ?: return null
+        fun getFrame(group: String, animStateId: Int, frameIndex: Int): SpriteFrame? {
+            val anim = animations[group + "_" + animStateId] ?: return null
             return anim.frames.getOrNull(frameIndex)
         }
     }
@@ -116,15 +111,10 @@ class SpriteManager(private val context: Context) {
     private fun loadBitmap(path: String): ImageBitmap? {
         return try {
             val options = BitmapFactory.Options().apply {
-                // [#118] AGY review: HARDWARE only on API 26+ and NOT in preview mode.
-                // For Compose, we convert to ImageBitmap which handles GPU memory.
-                inPreferredConfig = if (
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !isSoftwareContext
-                ) {
-                    android.graphics.Bitmap.Config.HARDWARE
-                } else {
-                    android.graphics.Bitmap.Config.ARGB_8888
-                }
+                // ARGB_8888 required: HARDWARE config returns null from
+                // decodeStream on emulators. Compose ImageBitmap handles
+                // GPU memory internally, so no benefit from HARDWARE hint.
+                inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
                 inMutable = false
             }
             context.assets.open(path).use { stream ->
@@ -138,10 +128,10 @@ class SpriteManager(private val context: Context) {
     }
 
     /**
-     * Parse TexturePacker Hash JSON format into animation state → frame array map.
+     * Parse TexturePacker Hash JSON format into "group_state" → frame array map.
      * Groups frames by animation name (e.g., "hero_knight_idle" → [frame0, frame1, ...]).
      */
-    private fun parseFrameJson(path: String): Map<Int, SpriteAnim> {
+    private fun parseFrameJson(path: String): Map<String, SpriteAnim> {
         val jsonStr = try {
             context.assets.open(path).bufferedReader().use { it.readText() }
         } catch (e: IOException) {
@@ -173,41 +163,51 @@ class SpriteManager(private val context: Context) {
             }
         }
 
-        // Convert to animStateId → SpriteAnim map
-        // Use the registered animation name mappings
+        // Convert to "group_state" → SpriteAnim map
         return buildAnimMap(animFrames)
     }
 
     /**
-     * Map animation group names to integer state IDs.
-     * Names like "hero_knight_idle" → ANIM_IDLE, "hero_knight_walk" → ANIM_WALK, etc.
-     * Also handles "enemy_zombie_idle" → ANIM_IDLE patterns.
+     * Map animation group names to "group_state" string keys.
+     * "hero_knight_idle" → key "hero_knight" + state ANIM_IDLE.
+     * "zombie_idle" → key "zombie" + state ANIM_IDLE.
+     * "proj_bullet_0" (single frame) → key "proj_bullet" + state ANIM_IDLE.
      */
-    private fun buildAnimMap(animFrames: Map<String, List<SpriteFrame>>): Map<Int, SpriteAnim> {
-        val result = mutableMapOf<Int, SpriteAnim>()
+    private fun buildAnimMap(animFrames: Map<String, List<SpriteFrame>>): Map<String, SpriteAnim> {
+        val result = mutableMapOf<String, SpriteAnim>()
 
         for ((name, frames) in animFrames) {
-            val animStateId = when {
-                name.endsWith("_idle") || name.endsWith("_Idle") -> ANIM_IDLE
-                name.endsWith("_walk") || name.endsWith("_Walk") -> ANIM_WALK
-                name.endsWith("_attack") || name.endsWith("_Attack") -> ANIM_ATTACK
-                name.endsWith("_death") || name.endsWith("_Death") -> ANIM_DEATH
-                // Single-frame effects get IDLE
-                !name.contains('_') || name.startsWith("proj_") || name.startsWith("pickup_") -> ANIM_IDLE
-                else -> ANIM_IDLE
+            // Determine animation state from suffix
+            val (baseName, animStateId) = when {
+                name.endsWith("_idle") || name.endsWith("_Idle") ->
+                    name.dropLast(5) to ANIM_IDLE
+                name.endsWith("_walk") || name.endsWith("_Walk") ->
+                    name.dropLast(5) to ANIM_WALK
+                name.endsWith("_attack") || name.endsWith("_Attack") ->
+                    name.dropLast(7) to ANIM_ATTACK
+                name.endsWith("_death") || name.endsWith("_Death") ->
+                    name.dropLast(6) to ANIM_DEATH
+                // Strip trailing _N for single-frame entries (proj_bullet_0 → proj_bullet)
+                else -> {
+                    val lastUs = name.lastIndexOf('_')
+                    if (lastUs > 0 && name[lastUs + 1].isDigit()) {
+                        name.substring(0, lastUs) to ANIM_IDLE
+                    } else {
+                        name to ANIM_IDLE
+                    }
+                }
             }
 
-            // Only keep the first animation per state ID for this atlas
-            // (If multiple entities share an atlas, we'd need per-entity anim mappings)
-            if (!result.containsKey(animStateId)) {
+            val key = baseName + "_" + animStateId
+            if (key !in result) {
                 val duration = when {
-                    name.contains("brute") -> SLOW_FRAME_DURATION
-                    name.contains("runner") -> FAST_FRAME_DURATION
-                    name.contains("boss") -> SLOW_FRAME_DURATION
-                    name.startsWith("proj_") || name.startsWith("pickup_") -> 0f // Static
+                    baseName.contains("brute") -> SLOW_FRAME_DURATION
+                    baseName.contains("runner") -> FAST_FRAME_DURATION
+                    baseName.contains("boss") -> SLOW_FRAME_DURATION
+                    baseName.startsWith("proj_") || baseName.startsWith("pickup_") -> 0f
                     else -> DEFAULT_FRAME_DURATION
                 }
-                result[animStateId] = SpriteAnim(frames.toTypedArray(), duration)
+                result[key] = SpriteAnim(frames.toTypedArray(), duration)
             }
         }
 
@@ -216,24 +216,24 @@ class SpriteManager(private val context: Context) {
 
     fun getSheet(atlasId: Int): SpriteSheet? = atlases.getOrNull(atlasId)
 
-    fun getFrame(atlasId: Int, animStateId: Int, frameIndex: Int): SpriteFrame? {
+    /** Get frame by animation group name + state ID (e.g. "zombie", ANIM_IDLE). */
+    fun getFrame(atlasId: Int, group: String, animStateId: Int, frameIndex: Int): SpriteFrame? {
         val sheet = atlases.getOrNull(atlasId) ?: return null
-        return sheet.getFrame(animStateId, frameIndex)
+        return sheet.getFrame(group, animStateId, frameIndex)
     }
 
-    fun getAnim(atlasId: Int, animStateId: Int): SpriteAnim? {
+    fun getAnim(atlasId: Int, group: String, animStateId: Int): SpriteAnim? {
         val sheet = atlases.getOrNull(atlasId) ?: return null
-        return sheet.getAnim(animStateId)
+        return sheet.getAnim(group, animStateId)
     }
 
     /**
-     * Register a specific animation for a given atlas + state.
-     * Used to override auto-detected animations with explicit per-entity mappings.
+     * Register a specific animation for a given atlas + group + state.
      */
-    fun registerAnim(atlasId: Int, animStateId: Int, anim: SpriteAnim) {
+    fun registerAnim(atlasId: Int, group: String, animStateId: Int, anim: SpriteAnim) {
         val sheet = atlases[atlasId] ?: return
         @Suppress("UNCHECKED_CAST")
-        val mutableAnims = sheet.animations as MutableMap<Int, SpriteAnim>
-        mutableAnims[animStateId] = anim
+        val mutableAnims = sheet.animations as MutableMap<String, SpriteAnim>
+        mutableAnims[group + "_" + animStateId] = anim
     }
 }

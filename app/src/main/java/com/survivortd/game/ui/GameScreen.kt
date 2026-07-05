@@ -644,11 +644,11 @@ private fun DrawScope.drawGameBackground(state: GameState) {
     // Theme based on game time — 5 chapters across 15 minutes
     val minute = state.elapsedSeconds / 60f
     val (baseColor, gridColor, _) = when {
-        minute < 3f -> Triple(0xFF1A150F, 0xFF2A2018, "Wasteland")
-        minute < 6f -> Triple(0xFF0F1A0F, 0xFF182A18, "Toxic Swamp")
-        minute < 9f -> Triple(0xFF0F0F1A, 0xFF18182A, "Abandoned City")
-        minute < 12f -> Triple(0xFF0F0F1A, 0xFF1A1A28, "Underground Lab")
-        else -> Triple(0xFF1A0F0F, 0xFF2A1818, "Final Bunker")
+        minute < 3f -> Triple(0xFF1A150F, 0xFF3D2E1E, "Wasteland")
+        minute < 6f -> Triple(0xFF0F1A0F, 0xFF1E3D1E, "Toxic Swamp")
+        minute < 9f -> Triple(0xFF0F0F1A, 0xFF1E1E3D, "Abandoned City")
+        minute < 12f -> Triple(0xFF0F0F1A, 0xFF2A2A40, "Underground Lab")
+        else -> Triple(0xFF1A0F0F, 0xFF3D2A2A, "Final Bunker")
     }
 
     drawRect(color = Color(baseColor))
@@ -659,13 +659,22 @@ private fun DrawScope.drawGameBackground(state: GameState) {
     val camY = state.cameraY * scale - size.height / 2f
 
     // Layer 0 (distant): large features, slowest scroll (0.2x camera)
-    drawParallaxGrid(camX * 0.2f, camY * 0.2f, 200f, Color(0xFF1A1F22).copy(alpha = 0.4f))
+    drawParallaxGrid(
+        camX * 0.2f, camY * 0.2f, 200f,
+        Color(gridColor.toLong()).copy(alpha = 0.15f)
+    )
 
     // Layer 1 (mid): medium detail (0.5x camera)
-    drawParallaxGrid(camX * 0.5f, camY * 0.5f, 120f, Color(gridColor.toLong()).copy(alpha = 0.5f))
+    drawParallaxGrid(
+        camX * 0.5f, camY * 0.5f, 120f,
+        Color(gridColor.toLong()).copy(alpha = 0.25f)
+    )
 
     // Layer 2 (foreground): current grid, 1:1 with camera
-    drawParallaxGrid(camX, camY, 80f, Color(gridColor.toLong()).copy(alpha = 0.7f))
+    drawParallaxGrid(
+        camX, camY, 80f,
+        Color(gridColor.toLong()).copy(alpha = 0.4f)
+    )
 }
 
 /**
@@ -739,7 +748,9 @@ private fun DrawScope.drawEntities(state: GameState, culler: FrustumCuller) {
         if (spriteMgr != null && i < sprites.size) {
             val sprite = sprites[i]
             if (sprite.hasSprite) {
-                val frame = spriteMgr.getFrame(sprite.atlasId, sprite.animState, sprite.frameIndex)
+                val frame = spriteMgr.getFrame(
+                    sprite.atlasId, sprite.animGroup, sprite.animState, sprite.frameIndex
+                )
                 if (frame != null) {
                     val sheet = spriteMgr.getSheet(sprite.atlasId)
                     if (sheet != null && sheet.bitmap != null) {
