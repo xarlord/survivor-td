@@ -147,6 +147,8 @@ class ProjectileSystem(
                     // VFX: explosion particles + heavy shake + hit-stop
                     particleSystem?.onExplosion(checkX, checkY)
                     gameFeelSystem?.onExplosion()
+                    // [#113] SFX: explosion
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.EXPLOSION)
                     // AoE projectiles die on first hit
                     state.healths[projIndex].currentHp = 0f
                     return
@@ -192,6 +194,8 @@ class ProjectileSystem(
                 // VFX: explosion at mine position
                 particleSystem?.onExplosion(minePos.x, minePos.y)
                 gameFeelSystem?.onHeavyHit()
+                // [#113] SFX: explosion
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.EXPLOSION)
                 return true
             }
         }

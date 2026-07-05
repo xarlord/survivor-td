@@ -47,6 +47,8 @@ import com.survivortd.game.config.GameConfig
 import com.survivortd.game.config.WeaponType
 import com.survivortd.game.core.GameState
 import com.survivortd.game.core.GameLoop
+import androidx.compose.ui.platform.LocalContext
+import com.survivortd.game.systems.AudioManager
 import com.survivortd.game.systems.LevelUpSystem
 import com.survivortd.game.systems.UpgradeChoice
 import com.survivortd.game.systems.VirtualJoystick
@@ -163,6 +165,14 @@ fun GameScreen(
     // [#32] StatusEffectSystem — processes DoTs and CC. Was completely missing.
     val statusEffectSystem = remember { com.survivortd.game.systems.StatusEffectSystem(gameState) }
 
+    // [#113] Initialize AudioManager with preloaded SFX
+    val context = LocalContext.current
+    val audioManager = remember(context) {
+        AudioManager.getInstance(context).also {
+            AudioManager.SfxType.entries.forEach { sfx -> it.loadSfx(sfx) }
+        }
+    }
+
     // [#20][#35] Spawn player and start game loop SYNCHRONOUSLY (not in LaunchedEffect).
     //
     // CRITICAL: LaunchedEffect(Unit) runs on the Main dispatcher. During E2E
@@ -242,6 +252,8 @@ fun GameScreen(
             gameLoopScope.cancel()
             // [#26] Unregister from TestGameBridge (debug only)
             com.survivortd.game.testing.TestGameBridge.unregister()
+            // [#113] Release AudioManager on dispose
+            audioManager.release()
         }
     }
 
@@ -303,6 +315,8 @@ fun GameScreen(
                 choices = levelUpChoices,
                 onChoiceSelected = { choice ->
                     levelUpSystem.applyChoice(choice)
+                    // [#113] Play level-up SFX
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.LEVEL_UP)
                     if (gameState.pendingLevelUps > 0) {
                         levelUpChoices = levelUpSystem.generateChoices()
                     } else {
@@ -311,6 +325,8 @@ fun GameScreen(
                 },
                 onTimeout = { choice ->
                     levelUpSystem.applyChoice(choice)
+                    // [#113] Play level-up SFX
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.LEVEL_UP)
                     if (gameState.pendingLevelUps > 0) {
                         levelUpChoices = levelUpSystem.generateChoices()
                     } else {
@@ -397,17 +413,19 @@ fun GameScreen(
             }
 
             // [#89] Game over — capture stats and show run summary
-            if (gameState.isGameOver && !gameState.gameOverHandled) {
-                gameState.gameOverHandled = true
-                summaryKills = gameState.totalKills
-                summaryGold = gameState.goldCollected
-                summaryLevel = hudLevel
-                summaryTime = hudTime
-                summaryWeapons = weaponSystem.weapons.size
-                // Delay 1.5 seconds before showing summary (death processing)
-                delay(1500)
-                showRunSummary = true
-            }
+                if (gameState.isGameOver && !gameState.gameOverHandled) {
+                    gameState.gameOverHandled = true
+                    // [#113] Play death SFX
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.PLAYER_DEATH)
+                    summaryKills = gameState.totalKills
+                    summaryGold = gameState.goldCollected
+                    summaryLevel = hudLevel
+                    summaryTime = hudTime
+                    summaryWeapons = weaponSystem.weapons.size
+                    // Delay 1.5 seconds before showing summary (death processing)
+                    delay(1500)
+                    showRunSummary = true
+                }
             delay(100)
         }
     }

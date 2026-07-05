@@ -101,6 +101,8 @@ class CombatSystem(
 
                 // VFX: player hit screen shake + damage flash
                 gameFeelSystem?.onPlayerHit()
+                // [#113] SFX: player hit
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.PLAYER_HIT)
 
                 // Knockback player away from enemy
                 val dist = sqrt(distSq.coerceAtLeast(0.01f))

@@ -93,6 +93,19 @@ class AudioManager private constructor(
                 }
             }
         }
+
+        /**
+         * Get existing instance, or silent mode if never initialized.
+         * Safe to call from any game system — returns a no-op AudioManager
+         * if getInstance(context) was never called.
+         */
+        fun getInstance(): AudioManager {
+            return instance ?: synchronized(this) {
+                instance ?: run {
+                    AudioManager(null, null).also { instance = it }
+                }
+            }
+        }
     }
 
     /**

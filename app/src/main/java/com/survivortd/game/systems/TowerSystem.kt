@@ -167,12 +167,30 @@ class TowerSystem(
         val targetPos = state.positions.getOrNull(tower.targetId) ?: return
 
         when (tower.type) {
-            TowerType.GUN_TURRET -> fireSingleTarget(tower, targetPos, stats.damage)
-            TowerType.CANNON -> fireAoE(tower, targetPos, stats.damage, stats.aoeRadius)
-            TowerType.FROST_TOWER -> fireFrost(tower, targetPos, stats.damage)
-            TowerType.TESLA_COIL -> fireChainLightning(tower, stats.damage)
-            TowerType.POISON_TOWER -> firePoisonCloud(tower, stats.damage)
-            TowerType.ROCKET_POD -> fireRocket(tower, targetPos, stats.damage, stats.aoeRadius)
+            TowerType.GUN_TURRET -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.TURRET_SHOT)
+                fireSingleTarget(tower, targetPos, stats.damage)
+            }
+            TowerType.CANNON -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.TURRET_SHOT)
+                fireAoE(tower, targetPos, stats.damage, stats.aoeRadius)
+            }
+            TowerType.FROST_TOWER -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.TURRET_SHOT)
+                fireFrost(tower, targetPos, stats.damage)
+            }
+            TowerType.TESLA_COIL -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.TESLA_ZAP)
+                fireChainLightning(tower, stats.damage)
+            }
+            TowerType.POISON_TOWER -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.TURRET_SHOT)
+                firePoisonCloud(tower, stats.damage)
+            }
+            TowerType.ROCKET_POD -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.TURRET_SHOT)
+                fireRocket(tower, targetPos, stats.damage, stats.aoeRadius)
+            }
         }
     }
 

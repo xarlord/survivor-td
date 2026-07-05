@@ -143,18 +143,48 @@ class WeaponSystem(
     // ================================================================
     private fun fireWeapon(w: WeaponInstance) {
         when (w.type) {
-            WeaponType.ASSAULT_RIFLE -> fireAssaultRifle(w)
-            WeaponType.SPREAD_GUN -> fireSpreadGun(w)
-            WeaponType.KATANA -> fireKatana(w)
+            WeaponType.ASSAULT_RIFLE -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.GUN_SHOT)
+                fireAssaultRifle(w)
+            }
+            WeaponType.SPREAD_GUN -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.GUN_SHOT)
+                fireSpreadGun(w)
+            }
+            WeaponType.KATANA -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.MAGIC_BLAST)
+                fireKatana(w)
+            }
             WeaponType.LIGHTNING_ORB -> { /* Orbital — handled in updateOrbital */ }
-            WeaponType.ROCKET_LAUNCHER -> fireRocket(w)
+            WeaponType.ROCKET_LAUNCHER -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.EXPLOSION)
+                fireRocket(w)
+            }
             WeaponType.FORCE_FIELD -> { /* Continuous — handled in updateForceField */ }
-            WeaponType.DRONE -> fireDrone(w)
-            WeaponType.FROST_NOVA -> fireFrostNova(w)
-            WeaponType.BOOMERANG -> fireBoomerang(w)
-            WeaponType.LANDMINE -> fireLandmine(w)
-            WeaponType.HEALING_PULSE -> fireHealingPulse(w)
-            WeaponType.LASER_BEAM -> fireLaserBeam(w)
+            WeaponType.DRONE -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.GUN_SHOT)
+                fireDrone(w)
+            }
+            WeaponType.FROST_NOVA -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.EXPLOSION)
+                fireFrostNova(w)
+            }
+            WeaponType.BOOMERANG -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.GUN_SHOT)
+                fireBoomerang(w)
+            }
+            WeaponType.LANDMINE -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.GUN_SHOT)
+                fireLandmine(w)
+            }
+            WeaponType.HEALING_PULSE -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.HEAL)
+                fireHealingPulse(w)
+            }
+            WeaponType.LASER_BEAM -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.LASER_HUM)
+                fireLaserBeam(w)
+            }
         }
     }
 
