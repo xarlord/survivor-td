@@ -1,5 +1,6 @@
 package com.survivortd.game.systems
 
+import android.util.Log
 import com.survivortd.game.config.GameConfig
 import com.survivortd.game.core.GameState
 import kotlinx.serialization.Serializable
@@ -12,6 +13,8 @@ import java.io.File
  * Purchased with gold earned from matches.
  * Stored as JSON on disk.
  */
+private const val TAG = "MetaProgression"
+
 @Serializable
 data class MetaProgression(
     var gold: Int = 0,
@@ -82,6 +85,7 @@ data class MetaProgression(
                     MetaProgression()
                 }
             } catch (e: Exception) {
+                Log.w(TAG, "Failed to load meta-progression from $path", e)
                 MetaProgression()
             }
         }
@@ -94,7 +98,7 @@ data class MetaProgression(
         try {
             File(path).writeText(Json.encodeToString(MetaProgression.serializer(), this))
         } catch (e: Exception) {
-            // Ignore save errors
+            Log.e(TAG, "Failed to save meta-progression to $path", e)
         }
     }
 

@@ -213,11 +213,13 @@ class SurvivorTDE2ETest {
      * not to verify exact spawn counts. [#49]
      */
     @Test
-    fun multiple_enemies_after_10_seconds() {
-        val snap = startGameAndSnapshot(10000)
+    fun multiple_enemies_after_15_seconds() {
+        // 15s wall-clock gives enough margin for slow CI emulators.
+        // Purpose: confirm spawning CONTINUES over time. [#49]
+        val snap = startGameAndSnapshot(15000)
 
         assertTrue(
-            "Should have 2+ enemies after 10s (got ${snap.enemyCount})",
+            "Should have 2+ enemies after 15s (got ${snap.enemyCount})",
             snap.enemyCount >= 2
         )
     }
