@@ -167,12 +167,30 @@ class TowerSystem(
         val targetPos = state.positions.getOrNull(tower.targetId) ?: return
 
         when (tower.type) {
-            TowerType.GUN_TURRET -> fireSingleTarget(tower, targetPos, stats.damage)
-            TowerType.CANNON -> fireAoE(tower, targetPos, stats.damage, stats.aoeRadius)
-            TowerType.FROST_TOWER -> fireFrost(tower, targetPos, stats.damage)
-            TowerType.TESLA_COIL -> fireChainLightning(tower, stats.damage)
-            TowerType.POISON_TOWER -> firePoisonCloud(tower, stats.damage)
-            TowerType.ROCKET_POD -> fireRocket(tower, targetPos, stats.damage, stats.aoeRadius)
+            TowerType.GUN_TURRET -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.TURRET_SHOT)
+                fireSingleTarget(tower, targetPos, stats.damage)
+            }
+            TowerType.CANNON -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.TURRET_SHOT)
+                fireAoE(tower, targetPos, stats.damage, stats.aoeRadius)
+            }
+            TowerType.FROST_TOWER -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.TURRET_SHOT)
+                fireFrost(tower, targetPos, stats.damage)
+            }
+            TowerType.TESLA_COIL -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.TESLA_ZAP)
+                fireChainLightning(tower, stats.damage)
+            }
+            TowerType.POISON_TOWER -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.TURRET_SHOT)
+                firePoisonCloud(tower, stats.damage)
+            }
+            TowerType.ROCKET_POD -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.TURRET_SHOT)
+                fireRocket(tower, targetPos, stats.damage, stats.aoeRadius)
+            }
         }
     }
 
@@ -202,7 +220,7 @@ class TowerSystem(
         val hp = state.healths.getOrNull(tower.targetId) ?: return
         hp.currentHp -= damage
 
-        // Apply slow effect to nearby enemies
+        // (#111) Apply SLOW status effect to nearby enemies (unified with StatusEffectSystem)
         val center = state.positions[tower.targetId]
         for (i in state.enemies.indices) {
             if (i >= state.tags.size) break
@@ -211,8 +229,7 @@ class TowerSystem(
             val dx = state.positions[i].x - center.x
             val dy = state.positions[i].y - center.y
             if (dx * dx + dy * dy <= 60f * 60f) {
-                state.enemies[i].slowTimer = 2f
-                state.enemies[i].slowMagnitude = 0.4f
+                applySlow(i, 2f, 0.4f)
             }
         }
     }
@@ -304,6 +321,27 @@ class TowerSystem(
                     type = StatusEffectType.STUN,
                     duration = duration,
                     magnitude = 1f
+                )
+            )
+        }
+    }
+
+    /**
+     * (#111) Apply a SLOW status effect to an enemy (unified with StatusEffectSystem).
+     */
+    private fun applySlow(enemyIndex: Int, duration: Float, magnitude: Float) {
+        if (enemyIndex < 0 || enemyIndex >= state.statusEffects.size) return
+        val se = state.statusEffects[enemyIndex]
+        val existing = se.effects.find { it.type == StatusEffectType.SLOW }
+        if (existing != null) {
+            existing.duration = maxOf(existing.duration, duration)
+        } else {
+            se.effects.add(
+                com.survivortd.game.components.StatusEffectsComponent.ActiveStatus(
+                    type = StatusEffectType.SLOW,
+                    duration = duration,
+                    magnitude = magnitude,
+                    tickInterval = 0f
                 )
             )
         }

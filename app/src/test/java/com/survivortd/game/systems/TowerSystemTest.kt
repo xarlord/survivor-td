@@ -1,6 +1,7 @@
 package com.survivortd.game.systems
 
 import com.survivortd.game.components.EnemyComponent
+import com.survivortd.game.config.StatusEffectType
 import com.survivortd.game.config.TowerType
 import com.survivortd.game.core.GameState
 import org.junit.jupiter.api.Assertions.*
@@ -188,7 +189,7 @@ class TowerSystemTest {
         }
 
         @Test
-        @DisplayName("Frost tower applies slow to nearby enemies")
+        @DisplayName("Frost tower applies slow to nearby enemies (#111: unified StatusEffect)")
         fun frostAppliesSlow() {
             state.players[state.playerIndex].scrap = 99999
             towerSys.placeTower(TowerType.FROST_TOWER, 200f, 200f)
@@ -196,8 +197,11 @@ class TowerSystemTest {
 
             repeat(60) { towerSys.update(0.016f) }
 
-            assertTrue(state.enemies[enemyId].slowTimer > 0f, "Enemy should be slowed")
-            assertTrue(state.enemies[enemyId].slowMagnitude > 0f, "Slow magnitude should be set")
+            // (#111) Frost tower now uses StatusEffectSystem instead of direct slowTimer/slowMagnitude
+            val hasSlow = state.statusEffects[enemyId].effects.any {
+                it.type == StatusEffectType.SLOW
+            }
+            assertTrue(hasSlow, "Enemy should have SLOW status effect from Frost Tower")
         }
 
         @Test

@@ -17,7 +17,8 @@ import kotlin.math.sqrt
  * When gems touch the player, XP/gold/heal is applied.
  */
 class PickupSystem(
-    private val state: GameState
+    private val state: GameState,
+    private val particleSystem: ParticleSystem? = null
 ) {
     /**
      * Process pickups for this tick.
@@ -25,6 +26,12 @@ class PickupSystem(
     fun update(dt: Float) {
         if (state.isPaused || state.isGameOver) return
         if (state.playerIndex < 0 || state.playerIndex >= state.positions.size) return
+
+        // Tick down magnet timer on player
+        val player = state.players.getOrNull(state.playerIndex)
+        if (player != null && player.magnetTimer > 0f) {
+            player.magnetTimer = (player.magnetTimer - dt).coerceAtLeast(0f)
+        }
 
         // Spawn gems from enemies that died this tick
         spawnGemsFromDeadEnemies()
@@ -50,18 +57,26 @@ class PickupSystem(
             if (!health.isDead) continue
 
             // Spawn gem at enemy position
-            if (i < state.positions.size) {
-                val pos = state.positions[i]
-                val enemyType = if (i < state.enemies.size) state.enemies[i].type
-                    else EnemyComponent.EnemyData.ZOMBIE
+                if (i < state.positions.size) {
+                    val pos = state.positions[i]
+                    val enemyType = if (i < state.enemies.size) state.enemies[i].type
+                        else EnemyComponent.EnemyData.ZOMBIE
 
-                spawnXpGem(pos.x, pos.y, enemyType)
+                    // VFX: enemy death burst particles
+                    particleSystem?.onEnemyDeath(pos.x, pos.y)
+
+                    // [#113] SFX: enemy death
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.ENEMY_DEATH)
+
+                    spawnXpGem(pos.x, pos.y, enemyType)
             }
         }
     }
 
     /**
      * Spawn an XP gem at the given position with a small scatter.
+     * [#91] XP gems are blue diamonds, gold drops are gold circles,
+     * health drops are green crosses — each with distinct visuals.
      */
     private fun spawnXpGem(x: Float, y: Float, enemyType: EnemyComponent.EnemyData) {
         val scatterX = (kotlin.random.Random.nextFloat() - 0.5f) * 20f
@@ -98,6 +113,7 @@ class PickupSystem(
             EnemyComponent.EnemyData.BOSS -> 50
         }
 
+        // [#91] Spawn XP gem as diamond shape
         state.spawnPickup(
             x = x + scatterX,
             y = y + scatterY,
@@ -105,8 +121,79 @@ class PickupSystem(
             goldValue = goldValue,
             scrapValue = scrapValue,
             color = gemColor,
-            radius = gemRadius
+            radius = gemRadius,
+            shape = RenderComponent.RenderShape.DIAMOND,
+            pickupType = when (enemyType) {
+                EnemyComponent.EnemyData.ELITE -> com.survivortd.game.config.PickupType.XP_GEM_LARGE
+                EnemyComponent.EnemyData.BOSS -> com.survivortd.game.config.PickupType.XP_GEM_BOSS
+                EnemyComponent.EnemyData.BRUTE,
+                EnemyComponent.EnemyData.SHIELDER,
+                EnemyComponent.EnemyData.SPITTER -> com.survivortd.game.config.PickupType.XP_GEM_MEDIUM
+                else -> com.survivortd.game.config.PickupType.XP_GEM_SMALL
+            }
         )
+
+        // [#91] Spawn gold as separate gold circle entity
+        if (goldValue > 0 && enemyType != EnemyComponent.EnemyData.BOSS) {
+            val goldScatter = (kotlin.random.Random.nextFloat() - 0.5f) * 15f
+            state.spawnPickup(
+                x = x + goldScatter,
+                y = y - 10f + goldScatter,
+                goldValue = goldValue,
+                color = 0xFFFFD700.toInt(),
+                radius = 4f,
+                shape = RenderComponent.RenderShape.CIRCLE,
+                pickupType = com.survivortd.game.config.PickupType.SCRAP
+            )
+        }
+
+        // [#91] Rare health drop (5% from any enemy)
+        if (kotlin.random.Random.nextFloat() < GameConfig.HEALTH_DROP_CHANCE) {
+            val healthScatter = (kotlin.random.Random.nextFloat() - 0.5f) * 15f
+            state.spawnPickup(
+                x = x + healthScatter,
+                y = y + 10f + healthScatter,
+                healAmount = 10f,
+                color = 0xFF00E676.toInt(),
+                radius = 6f,
+                shape = RenderComponent.RenderShape.CROSS,
+                pickupType = com.survivortd.game.config.PickupType.HEALTH_PACK
+            )
+        }
+
+        // [#116] Special pickups
+        val specialScatter = (kotlin.random.Random.nextFloat() - 0.5f) * 15f
+
+        // Magnet pickup (2% chance)
+        if (kotlin.random.Random.nextFloat() < GameConfig.MAGNET_DROP_CHANCE) {
+            state.spawnPickup(
+                x = x + specialScatter, y = y + specialScatter,
+                color = 0xFFE040FB.toInt(), radius = 8f,
+                shape = RenderComponent.RenderShape.CIRCLE,
+                pickupType = com.survivortd.game.config.PickupType.MAGNET
+            )
+        }
+
+        // Bomb pickup (1% chance)
+        if (kotlin.random.Random.nextFloat() < GameConfig.BOMB_DROP_CHANCE) {
+            state.spawnPickup(
+                x = x + specialScatter, y = y - specialScatter,
+                color = 0xFFFF5722.toInt(), radius = 8f,
+                shape = RenderComponent.RenderShape.CIRCLE,
+                pickupType = com.survivortd.game.config.PickupType.BOMB
+            )
+        }
+
+        // Treasure Chest pickup (0.5% chance)
+        if (kotlin.random.Random.nextFloat() < GameConfig.TREASURE_CHEST_DROP_CHANCE) {
+            state.spawnPickup(
+                x = x + specialScatter, y = y + specialScatter,
+                goldValue = GameConfig.GOLD_CHEST_MIN + kotlin.random.Random.nextInt(GameConfig.GOLD_CHEST_MAX - GameConfig.GOLD_CHEST_MIN),
+                color = 0xFFFFD700.toInt(), radius = 10f,
+                shape = RenderComponent.RenderShape.DIAMOND,
+                pickupType = com.survivortd.game.config.PickupType.TREASURE_CHEST
+            )
+        }
     }
 
     /**
@@ -121,7 +208,11 @@ class PickupSystem(
         for (i in state.pickups.indices) {
             if (i >= state.positions.size) break
             val pickup = state.pickups[i]
-            if (pickup.xpValue == 0 && pickup.goldValue == 0 && pickup.healAmount == 0f) continue
+            if (pickup.xpValue == 0 && pickup.goldValue == 0 && pickup.healAmount == 0f
+                && pickup.pickupType != com.survivortd.game.config.PickupType.MAGNET
+                && pickup.pickupType != com.survivortd.game.config.PickupType.BOMB
+                && pickup.pickupType != com.survivortd.game.config.PickupType.TREASURE_CHEST
+            ) continue
 
             val pos = state.positions[i]
 
@@ -130,7 +221,9 @@ class PickupSystem(
             if (pickup.lifetime <= 0f) {
                 pickup.xpValue = 0
                 pickup.goldValue = 0
+                pickup.scrapValue = 0
                 pickup.healAmount = 0f
+                state.healths[i].currentHp = 0f
                 continue
             }
 
@@ -139,8 +232,8 @@ class PickupSystem(
             val distSq = dx * dx + dy * dy
             val dist = sqrt(distSq.coerceAtLeast(0.01f))
 
-            // Check magnetism range
-            val magnetRange = player.pickupRange
+            // Check magnetism range — use enhanced range when magnet is active
+            val magnetRange = if (player.magnetTimer > 0f) GameConfig.MAGNET_PICKUP_RANGE else player.pickupRange
             if (dist < magnetRange) {
                 pickup.isMagnetized = true
             }
@@ -158,17 +251,25 @@ class PickupSystem(
                 // Apply XP
                 if (pickup.xpValue > 0) {
                     player.currentXp += pickup.xpValue
+                    state.score += 10
                     while (player.currentXp >= player.xpToNext && player.level < GameConfig.MAX_LEVEL) {
                         player.currentXp -= player.xpToNext
                         player.level++
                         player.xpToNext = GameConfig.xpForLevel(player.level)
                         state.pendingLevelUps++
                     }
+                    // VFX: gem sparkle on XP pickup
+                    particleSystem?.onGemPickup(pos.x, pos.y)
+                    // [#113] SFX: gem collect
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.GEM_COLLECT)
                 }
                 // Apply gold
                 if (pickup.goldValue > 0) {
                     player.gold += pickup.goldValue
                     state.goldCollected += pickup.goldValue
+                    // [#113] SFX: coin clink
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.COIN_CLINK)
+                    state.score += 25
                 }
                 // Apply scrap
                 if (pickup.scrapValue > 0) {
@@ -178,12 +279,41 @@ class PickupSystem(
                 if (pickup.healAmount > 0f && state.playerIndex < state.healths.size) {
                     val health = state.healths[state.playerIndex]
                     health.currentHp = (health.currentHp + pickup.healAmount).coerceAtMost(health.maxHp)
+                    state.score += 100
+                    // VFX: heal sparkle
+                    particleSystem?.onHeal(pos.x, pos.y)
+                    // [#113] SFX: heal
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.HEAL)
+                }
+                // [#116] Special pickup effects
+                when (pickup.pickupType) {
+                    com.survivortd.game.config.PickupType.MAGNET -> {
+                        player.magnetTimer = GameConfig.MAGNET_DURATION
+                    }
+                    com.survivortd.game.config.PickupType.BOMB -> {
+                        for (j in state.healths.indices) {
+                            if (j < state.tags.size && state.tags[j].tag == com.survivortd.game.components.TagComponent.EntityTag.ENEMY) {
+                                if (j < state.healths.size) {
+                                    state.healths[j].currentHp -= GameConfig.BOMB_DAMAGE
+                                }
+                            }
+                        }
+                        particleSystem?.onEnemyDeath(playerPos.x, playerPos.y)
+                    }
+                    com.survivortd.game.config.PickupType.TREASURE_CHEST -> {
+                        val chestGold = pickup.goldValue.coerceAtLeast(GameConfig.GOLD_CHEST_MIN)
+                        player.gold += chestGold
+                        state.goldCollected += chestGold
+                        state.score += 25
+                    }
+                    else -> {}
                 }
                 // Mark for removal
                 pickup.xpValue = 0
                 pickup.goldValue = 0
                 pickup.scrapValue = 0
                 pickup.healAmount = 0f
+                state.healths[i].currentHp = 0f
             }
         }
     }

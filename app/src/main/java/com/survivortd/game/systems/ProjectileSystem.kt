@@ -1,21 +1,21 @@
 package com.survivortd.game.systems
 
+import com.survivortd.game.components.DamageNumberComponent
 import com.survivortd.game.components.EnemyComponent
 import com.survivortd.game.components.ProjectileComponent
 import com.survivortd.game.components.TagComponent
+import com.survivortd.game.config.GameConfig
 import com.survivortd.game.core.GameState
-import kotlin.math.sqrt
 
 /**
  * Projectile System — moves projectiles, handles enemy collisions,
  * pierce counting, AoE explosions, boomerang return, mine detonation.
  */
 class ProjectileSystem(
-    private val state: GameState
+    private val state: GameState,
+    private val particleSystem: ParticleSystem? = null,
+    private val gameFeelSystem: GameFeelSystem? = null
 ) {
-    private val playerStartX = 0f  // Set on first boomerang update
-    private val playerStartY = 0f
-
     fun update(dt: Float) {
         if (state.isPaused || state.isGameOver) return
         if (state.playerIndex < 0) return
@@ -42,13 +42,15 @@ class ProjectileSystem(
                     val playerPos = state.positions[state.playerIndex]
                     val dx = playerPos.x - pos.x
                     val dy = playerPos.y - pos.y
-                    val dist = sqrt(dx * dx + dy * dy)
-                    if (dist < 30f) {
+                    val distSq = dx * dx + dy * dy
+                    // (#115) Use squared distance comparison instead of sqrt
+                    if (distSq < 900f) { // 30^2 = 900
                         // Reached player — expire
                         state.healths[i].currentHp = 0f
                         i++
                         continue
                     }
+                    val dist = kotlin.math.sqrt(distSq)
                     vel.x = (dx / dist) * kotlin.math.abs(vel.x).coerceAtLeast(200f)
                     vel.y = (dy / dist) * kotlin.math.abs(vel.y).coerceAtLeast(200f)
                     proj.lifetime = 1.5f
@@ -102,7 +104,8 @@ class ProjectileSystem(
 
     /**
      * Check collision between projectile and all enemies.
-     * Handles pierce, damage application, and hit-set tracking.
+     * (#115) Optimized: uses squared distances, pre-computed hit radius squared,
+     * and early exit if projectile is moving away from all remaining enemies.
      */
     private fun checkProjectileCollisions(
         projIndex: Int,
@@ -110,6 +113,15 @@ class ProjectileSystem(
         checkX: Float,
         checkY: Float
     ) {
+        // (#115) Pre-compute hit radius squared
+        val projRadius = if (projIndex < state.renders.size) state.renders[projIndex].radius else 4f
+        val hitRadius = 20f + projRadius
+        val hitRadiusSq = hitRadius * hitRadius
+
+        // (#115) Get projectile velocity direction for early exit optimization
+        val vel = if (projIndex < state.velocities.size) state.velocities[projIndex] else null
+        val hasVelocity = vel != null && (vel.x != 0f || vel.y != 0f)
+
         for (j in state.enemies.indices) {
             if (j >= state.tags.size) break
             if (state.tags[j].tag != TagComponent.EntityTag.ENEMY) continue
@@ -124,8 +136,15 @@ class ProjectileSystem(
             val dy = enemyPos.y - checkY
             val distSq = dx * dx + dy * dy
 
-            val hitRadius = 20f + (if (projIndex < state.renders.size) state.renders[projIndex].radius else 4f)
-            if (distSq <= hitRadius * hitRadius) {
+            // (#115) Early exit: if projectile moving in a direction and enemy is behind it
+            // + beyond hit radius, we can stop checking if distance is increasing
+            if (hasVelocity && distSq > hitRadiusSq * 16f) {
+                val velRef = vel!!
+                // Enemy is behind the projectile direction
+                if (dx * velRef.x + dy * velRef.y < 0f) continue
+            }
+
+            if (distSq <= hitRadiusSq) {
                 // Hit!
                 dealProjectileDamage(j, proj, projIndex)
 
@@ -134,9 +153,18 @@ class ProjectileSystem(
                     applyStatusEffect(j, statusType, proj.onHitEffectDuration, proj.onHitEffectMagnitude)
                 }
 
+                // VFX: hit spark particles + light screen shake
+                particleSystem?.onHit(checkX, checkY)
+                gameFeelSystem?.onLightHit()
+
                 // AoE explosion
                 if (proj.aoeRadius > 0f) {
                     explodeAoE(checkX, checkY, proj.aoeRadius, proj.damage, j)
+                    // VFX: explosion particles + heavy shake + hit-stop
+                    particleSystem?.onExplosion(checkX, checkY)
+                    gameFeelSystem?.onExplosion()
+                    // [#113] SFX: explosion
+                    AudioManager.getInstance().playSfx(AudioManager.SfxType.EXPLOSION)
                     // AoE projectiles die on first hit
                     state.healths[projIndex].currentHp = 0f
                     return
@@ -179,6 +207,11 @@ class ProjectileSystem(
             if (dx * dx + dy * dy <= triggerRadius * triggerRadius) {
                 // Detonate!
                 explodeAoE(minePos.x, minePos.y, proj.aoeRadius, proj.damage, j)
+                // VFX: explosion at mine position
+                particleSystem?.onExplosion(minePos.x, minePos.y)
+                gameFeelSystem?.onHeavyHit()
+                // [#113] SFX: explosion
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.EXPLOSION)
                 return true
             }
         }
@@ -211,6 +244,7 @@ class ProjectileSystem(
 
     /**
      * Deal projectile damage to an enemy (respects shielder reduction).
+     * (#111: Added crit logic matching WeaponSystem)
      */
     private fun dealProjectileDamage(
         enemyIndex: Int,
@@ -224,10 +258,20 @@ class ProjectileSystem(
         if (enemyIndex < state.enemies.size && state.enemies[enemyIndex].knockbackResist >= 2f) {
             damage *= 0.5f
         }
-        // Armor
-        damage = (damage - health.armor).coerceAtLeast(damage * 0.1f)
+        // Armor (#108: flat subtraction per GDD §3.2)
+        damage = GameConfig.armorReduction(damage, health.armor)
 
-        health.currentHp -= damage
+        // (#111) Crit check — matches WeaponSystem behavior
+        val playerComp = state.players.getOrNull(minOf(state.playerIndex, state.players.size - 1))
+        val crit = playerComp != null && kotlin.random.Random.nextFloat() < playerComp.critChance
+        val finalDamage = if (crit) damage * 2f else damage
+
+        health.currentHp -= finalDamage
+
+        // [#114] VFX: damage number + hit flash
+        val enemyPos = state.positions[enemyIndex]
+        state.damageNumbers.add(DamageNumberComponent(x = enemyPos.x, y = enemyPos.y - 10f, value = finalDamage, isCrit = crit))
+        if (enemyIndex < state.renders.size) { state.renders[enemyIndex].hitFlashTimer = 0.1f }
     }
 
     /**
@@ -239,8 +283,12 @@ class ProjectileSystem(
         if (enemyIndex < state.enemies.size && state.enemies[enemyIndex].knockbackResist >= 2f) {
             dmg *= 0.5f
         }
-        dmg = (dmg - health.armor).coerceAtLeast(dmg * 0.1f)
+        // Armor (#108: flat subtraction per GDD §3.2)
+        dmg = GameConfig.armorReduction(dmg, health.armor)
         health.currentHp -= dmg
+        val ePos = state.positions[enemyIndex]
+        state.damageNumbers.add(DamageNumberComponent(x = ePos.x, y = ePos.y - 10f, value = dmg))
+        if (enemyIndex < state.renders.size) { state.renders[enemyIndex].hitFlashTimer = 0.1f }
     }
 
     /**

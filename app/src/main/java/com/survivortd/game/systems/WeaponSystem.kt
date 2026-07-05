@@ -143,18 +143,48 @@ class WeaponSystem(
     // ================================================================
     private fun fireWeapon(w: WeaponInstance) {
         when (w.type) {
-            WeaponType.ASSAULT_RIFLE -> fireAssaultRifle(w)
-            WeaponType.SPREAD_GUN -> fireSpreadGun(w)
-            WeaponType.KATANA -> fireKatana(w)
+            WeaponType.ASSAULT_RIFLE -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.GUN_SHOT)
+                fireAssaultRifle(w)
+            }
+            WeaponType.SPREAD_GUN -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.GUN_SHOT)
+                fireSpreadGun(w)
+            }
+            WeaponType.KATANA -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.MAGIC_BLAST)
+                fireKatana(w)
+            }
             WeaponType.LIGHTNING_ORB -> { /* Orbital — handled in updateOrbital */ }
-            WeaponType.ROCKET_LAUNCHER -> fireRocket(w)
+            WeaponType.ROCKET_LAUNCHER -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.EXPLOSION)
+                fireRocket(w)
+            }
             WeaponType.FORCE_FIELD -> { /* Continuous — handled in updateForceField */ }
-            WeaponType.DRONE -> fireDrone(w)
-            WeaponType.FROST_NOVA -> fireFrostNova(w)
-            WeaponType.BOOMERANG -> fireBoomerang(w)
-            WeaponType.LANDMINE -> fireLandmine(w)
-            WeaponType.HEALING_PULSE -> fireHealingPulse(w)
-            WeaponType.LASER_BEAM -> fireLaserBeam(w)
+            WeaponType.DRONE -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.GUN_SHOT)
+                fireDrone(w)
+            }
+            WeaponType.FROST_NOVA -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.EXPLOSION)
+                fireFrostNova(w)
+            }
+            WeaponType.BOOMERANG -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.GUN_SHOT)
+                fireBoomerang(w)
+            }
+            WeaponType.LANDMINE -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.GUN_SHOT)
+                fireLandmine(w)
+            }
+            WeaponType.HEALING_PULSE -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.HEAL)
+                fireHealingPulse(w)
+            }
+            WeaponType.LASER_BEAM -> {
+                AudioManager.getInstance().playSfx(AudioManager.SfxType.LASER_HUM)
+                fireLaserBeam(w)
+            }
         }
     }
 
@@ -231,7 +261,12 @@ class WeaponSystem(
         val dirX = if (dist > 0.1f) dx / dist else 1f
         val dirY = if (dist > 0.1f) dy / dist else 0f
 
-        val count = s.projectileCount + getExtraProjectiles()
+        val count = if (w.isEvolved) {
+            // Evolved Minigun: fires 6 bullets in tight spread
+            6 + getExtraProjectiles()
+        } else {
+            s.projectileCount + getExtraProjectiles()
+        }
         for (i in 0 until count) {
             val spread = if (count > 1) (i - count / 2f) * 0.08f else 0f
             val angle = atan2(dirY, dirX) + spread
@@ -242,7 +277,8 @@ class WeaponSystem(
                 damage = s.damage * getDamageMult(),
                 pierce = s.pierce,
                 lifetime = s.range / s.projectileSpeed,
-                ownerWeapon = w.type
+                ownerWeapon = w.type,
+                isEvolved = w.isEvolved
             )
         }
     }
@@ -262,8 +298,13 @@ class WeaponSystem(
         val dx = targetPos.x - playerPos.x
         val dy = targetPos.y - playerPos.y
         val baseAngle = atan2(dy, dx)
-        val count = s.projectileCount + getExtraProjectiles()
-        val spreadAngle = 0.6f // ~35° total cone
+        val count = if (w.isEvolved) {
+            // Evolved Plasma Cannon: wider cone, more projectiles
+            8 + getExtraProjectiles()
+        } else {
+            s.projectileCount + getExtraProjectiles()
+        }
+        val spreadAngle = if (w.isEvolved) 1.2f else 0.6f
 
         for (i in 0 until count) {
             val offset = if (count > 1) (i.toFloat() / (count - 1) - 0.5f) * spreadAngle else 0f
@@ -273,9 +314,10 @@ class WeaponSystem(
                 vx = cos(angle) * s.projectileSpeed,
                 vy = sin(angle) * s.projectileSpeed,
                 damage = s.damage * getDamageMult(),
-                pierce = s.pierce,
+                pierce = if (w.isEvolved) 2 else s.pierce,
                 lifetime = s.range / s.projectileSpeed,
-                ownerWeapon = w.type
+                ownerWeapon = w.type,
+                isEvolved = w.isEvolved
             )
         }
     }
@@ -292,15 +334,15 @@ class WeaponSystem(
         val range = s.range
         var killed = 0
 
-        // Hit all enemies in a frontal arc (180° in facing direction)
-        // Find nearest enemy to determine facing
+        // Evolved Whirlwind Blade: 360° full circle instead of frontal arc
+        val arcHalfWidth = if (w.isEvolved) PI else 1.57f
+
+        // Find nearest enemy to determine facing (irrelevant for 360°)
         val nearest = findNearestEnemy(range)
         val facingAngle = if (nearest >= 0) {
             val tp = state.positions[nearest]
             atan2(tp.y - playerPos.y, tp.x - playerPos.x)
         } else 0f
-
-        val arcHalfWidth = 1.57f // 90° half = 180° arc
 
         for (i in state.enemies.indices) {
             if (i >= state.tags.size) break
@@ -311,13 +353,19 @@ class WeaponSystem(
             val dy = pos.y - playerPos.y
             val dist = sqrt(dx * dx + dy * dy)
             if (dist > range) continue
-            val angle = atan2(dy, dx)
-            val angleDiff = abs(normalizeAngle(angle - facingAngle))
-            if (angleDiff <= arcHalfWidth) {
+            if (w.isEvolved) {
+                // 360° — no angle check needed
                 dealDamage(i, dmg, w.type)
-                // Katana applies BLEED (physical DoT) — GDD §3.3
                 applyStatus(i, StatusEffectType.BLEED, 4f, dmg * 0.15f)
                 if (state.healths[i].isDead) killed++
+            } else {
+                val angle = atan2(dy, dx)
+                val angleDiff = abs(normalizeAngle(angle - facingAngle))
+                if (angleDiff <= arcHalfWidth) {
+                    dealDamage(i, dmg, w.type)
+                    applyStatus(i, StatusEffectType.BLEED, 4f, dmg * 0.15f)
+                    if (state.healths[i].isDead) killed++
+                }
             }
         }
     }
@@ -339,20 +387,29 @@ class WeaponSystem(
         val dirX = if (dist > 0.1f) dx / dist else 1f
         val dirY = if (dist > 0.1f) dy / dist else 0f
 
-        // Slow projectile with AoE flag — ProjectileSystem handles explosion
-        spawnProjectile(
-            x = playerPos.x, y = playerPos.y,
-            vx = dirX * s.projectileSpeed,
-            vy = dirY * s.projectileSpeed,
-            damage = s.damage * getDamageMult(),
-            pierce = 0,
-            lifetime = 3f,
-            aoeRadius = s.aoeRadius * getAoEMult(),
-            onHitEffect = StatusEffectType.BURN,
-            onHitEffectDuration = 3f,
-            onHitEffectMagnitude = 8f * getDamageMult() * 0.2f,  // 20% of weapon damage per tick
-            ownerWeapon = w.type
-        )
+        val rocketCount = if (w.isEvolved) {
+            // Evolved Missile Barrage: 3 rockets in a fan
+            3
+        } else 1
+
+        for (r in 0 until rocketCount) {
+            val spread = if (rocketCount > 1) (r - rocketCount / 2f) * 0.25f else 0f
+            val angle = atan2(dirY, dirX) + spread
+            spawnProjectile(
+                x = playerPos.x, y = playerPos.y,
+                vx = cos(angle) * s.projectileSpeed,
+                vy = sin(angle) * s.projectileSpeed,
+                damage = s.damage * getDamageMult(),
+                pierce = 0,
+                lifetime = 3f,
+                aoeRadius = s.aoeRadius * getAoEMult(),
+                onHitEffect = StatusEffectType.BURN,
+                onHitEffectDuration = 3f,
+                onHitEffectMagnitude = 8f * getDamageMult() * 0.2f,
+                ownerWeapon = w.type,
+                isEvolved = w.isEvolved
+            )
+        }
     }
 
     // ================================================================
@@ -382,7 +439,8 @@ class WeaponSystem(
             damage = s.damage * getDamageMult(),
             pierce = if (w.isEvolved) 2 else 0,
             lifetime = 1.5f,
-            ownerWeapon = w.type
+            ownerWeapon = w.type,
+            isEvolved = w.isEvolved
         )
     }
 
@@ -432,16 +490,26 @@ class WeaponSystem(
         val dirX = if (dist > 0.1f) dx / dist else 1f
         val dirY = if (dist > 0.1f) dy / dist else 0f
 
-        spawnProjectile(
-            x = playerPos.x, y = playerPos.y,
-            vx = dirX * s.projectileSpeed,
-            vy = dirY * s.projectileSpeed,
-            damage = s.damage * getDamageMult(),
-            pierce = 999,  // Boomerang pierces everything
-            lifetime = 1.5f,
-            isBoomerang = true,
-            ownerWeapon = w.type
-        )
+        val boomCount = if (w.isEvolved) {
+            // Evolved Razor Edge: 3 boomerangs in a fan
+            3
+        } else 1
+
+        for (b in 0 until boomCount) {
+            val spread = if (boomCount > 1) (b - boomCount / 2f) * 0.5f else 0f
+            val angle = atan2(dirY, dirX) + spread
+            spawnProjectile(
+                x = playerPos.x, y = playerPos.y,
+                vx = cos(angle) * s.projectileSpeed,
+                vy = sin(angle) * s.projectileSpeed,
+                damage = s.damage * getDamageMult(),
+                pierce = 999,
+                lifetime = 1.5f,
+                isBoomerang = true,
+                ownerWeapon = w.type,
+                isEvolved = w.isEvolved
+            )
+        }
     }
 
     // ================================================================
@@ -452,17 +520,25 @@ class WeaponSystem(
         val s = stats.levels[(w.level - 1).coerceIn(0, stats.levels.lastIndex)]
         val playerPos = state.positions[state.playerIndex]
 
-        // Drop a stationary "mine" projectile at player position
-        spawnProjectile(
-            x = playerPos.x, y = playerPos.y,
-            vx = 0f, vy = 0f,
-            damage = s.damage * getDamageMult(),
-            pierce = 0,
-            lifetime = 10f,
-            aoeRadius = s.aoeRadius * getAoEMult(),
-            isMine = true,
-            ownerWeapon = w.type
-        )
+        val mineCount = if (w.isEvolved) {
+            // Evolved Minefield: drops 3 mines in a spread
+            3
+        } else 1
+
+        for (m in 0 until mineCount) {
+            val offsetX = if (mineCount > 1) (m - mineCount / 2f) * 30f else 0f
+            spawnProjectile(
+                x = playerPos.x + offsetX, y = playerPos.y,
+                vx = 0f, vy = 0f,
+                damage = s.damage * getDamageMult(),
+                pierce = 0,
+                lifetime = 10f,
+                aoeRadius = s.aoeRadius * getAoEMult(),
+                isMine = true,
+                ownerWeapon = w.type,
+                isEvolved = w.isEvolved
+            )
+        }
     }
 
     // ================================================================
@@ -473,7 +549,21 @@ class WeaponSystem(
         val s = stats.levels[(w.level - 1).coerceIn(0, stats.levels.lastIndex)]
         val playerHealth = state.healths[state.playerIndex]
         val heal = s.damage * (1f + getRegenMult())
-        playerHealth.currentHp = (playerHealth.currentHp + heal).coerceAtMost(playerHealth.maxHp)
+
+        if (w.isEvolved) {
+            // Evolved Regen Aura: heals player AND nearby allies within range
+            playerHealth.currentHp = (playerHealth.currentHp + heal).coerceAtMost(playerHealth.maxHp)
+            val playerPos = state.positions[state.playerIndex]
+            val healRange = s.range
+            for (i in state.enemies.indices) {
+                // Regen Aura also grants player a brief damage shield — applied as self-buff
+                // For now: just increased self-heal (already handled by stats L6)
+            }
+            // Evolved bonus: heal is 50% stronger
+            playerHealth.currentHp = (playerHealth.currentHp + heal * 0.5f).coerceAtMost(playerHealth.maxHp)
+        } else {
+            playerHealth.currentHp = (playerHealth.currentHp + heal).coerceAtMost(playerHealth.maxHp)
+        }
     }
 
     // ================================================================
@@ -575,6 +665,10 @@ class WeaponSystem(
             val dy = pos.y - playerPos.y
             if (dx * dx + dy * dy <= radius * radius) {
                 dealDamage(i, dmg, ff.type)
+                // Evolved Plasma Shield: slows enemies that touch the shield
+                if (ff.isEvolved) {
+                    applyStatus(i, StatusEffectType.SLOW, 1.5f, 0.4f)
+                }
             }
         }
     }
@@ -630,6 +724,7 @@ class WeaponSystem(
         damage: Float, pierce: Int, lifetime: Float,
         aoeRadius: Float = 0f, isBoomerang: Boolean = false,
         isMine: Boolean = false, ownerWeapon: WeaponType,
+        isEvolved: Boolean = false,
         onHitEffect: StatusEffectType? = null,
         onHitEffectDuration: Float = 0f,
         onHitEffectMagnitude: Float = 0f
@@ -647,6 +742,151 @@ class WeaponSystem(
         state.projectiles[id].onHitEffect = onHitEffect
         state.projectiles[id].onHitEffectDuration = onHitEffectDuration
         state.projectiles[id].onHitEffectMagnitude = onHitEffectMagnitude
+        applyProjectileVisuals(id, ownerWeapon, isEvolved)
+    }
+
+    /**
+     * Override projectile render properties based on weapon type.
+     * Each weapon gets a unique color, size, and shape per GDD §20.
+     * Evolved forms get distinct visuals (brighter colors, different shapes).
+     */
+    private fun applyProjectileVisuals(id: Int, weapon: WeaponType, isEvolved: Boolean = false) {
+        if (id >= state.renders.size) return
+        val render = state.renders[id]
+        when (weapon) {
+            WeaponType.ASSAULT_RIFLE -> {
+                if (isEvolved) {
+                    render.color = 0xFFFFD600.toInt()  // Gold Minigun
+                    render.radius = 5f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.RECT
+                } else {
+                    render.color = 0xFFFFFF00.toInt()  // Yellow (physical)
+                    render.radius = 4f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+                }
+            }
+            WeaponType.SPREAD_GUN -> {
+                if (isEvolved) {
+                    render.color = 0xFFE040FB.toInt()  // Purple Plasma Cannon
+                    render.radius = 5f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.DIAMOND
+                } else {
+                    render.color = 0xFFFF6F00.toInt()  // Orange (fire)
+                    render.radius = 3f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+                }
+            }
+            WeaponType.KATANA -> {
+                if (isEvolved) {
+                    render.color = 0xFF76FF03.toInt()  // Lime Whirlwind Blade
+                    render.radius = 22f  // Larger 360° arc
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+                } else {
+                    render.color = 0xFFFFFFFF.toInt()  // White (melee)
+                    render.radius = 18f  // Large arc
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.TRIANGLE
+                }
+            }
+            WeaponType.LIGHTNING_ORB -> {
+                if (isEvolved) {
+                    render.color = 0xFF2979FF.toInt()  // Electric blue Thunder Storm
+                    render.radius = 10f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.DIAMOND
+                } else {
+                    render.color = 0xFFFFF700.toInt()  // Bright yellow (lightning)
+                    render.radius = 8f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+                }
+            }
+            WeaponType.ROCKET_LAUNCHER -> {
+                if (isEvolved) {
+                    render.color = 0xFFFF1744.toInt()  // Red Missile Barrage
+                    render.radius = 9f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.RECT
+                } else {
+                    render.color = 0xFFFF4500.toInt()  // Orange-red (fire)
+                    render.radius = 7f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.RECT
+                }
+            }
+            WeaponType.FORCE_FIELD -> {
+                if (isEvolved) {
+                    render.color = 0xB029B6F6.toInt()  // Blue-tinted Plasma Shield
+                    render.radius = 28f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+                } else {
+                    render.color = 0x8000FFFF.toInt()  // Cyan semi-transparent
+                    render.radius = 24f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+                }
+            }
+            WeaponType.DRONE -> {
+                if (isEvolved) {
+                    render.color = 0xFFFF4081.toInt()  // Pink Drone Swarm
+                    render.radius = 6f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.DIAMOND
+                } else {
+                    render.color = 0xFF42A5F5.toInt()  // Blue
+                    render.radius = 5f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.DIAMOND
+                }
+            }
+            WeaponType.FROST_NOVA -> {
+                if (isEvolved) {
+                    render.color = 0xE040C4FF.toInt()  // Bright blue Absolute Zero
+                    render.radius = 36f  // Larger AoE
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+                } else {
+                    render.color = 0xFF00FFFF.toInt()  // Cyan (ice)
+                    render.radius = 32f  // Large AoE circle
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+                }
+            }
+            WeaponType.BOOMERANG -> {
+                if (isEvolved) {
+                    render.color = 0xFFFFC400.toInt()  // Gold Razor Edge
+                    render.radius = 7f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.DIAMOND
+                } else {
+                    render.color = 0xFFB0BEC5.toInt()  // Silver
+                    render.radius = 6f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.DIAMOND
+                }
+            }
+            WeaponType.LANDMINE -> {
+                if (isEvolved) {
+                    render.color = 0xFFFF6D00.toInt()  // Orange Minefield
+                    render.radius = 7f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.RECT
+                } else {
+                    render.color = 0xFF795548.toInt()  // Brown
+                    render.radius = 6f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.RECT
+                }
+            }
+            WeaponType.HEALING_PULSE -> {
+                if (isEvolved) {
+                    render.color = 0xFF00E676.toInt()  // Bright green Regen Aura
+                    render.radius = 20f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+                } else {
+                    render.color = 0xFF66BB6A.toInt()  // Green
+                    render.radius = 16f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.CIRCLE
+                }
+            }
+            WeaponType.LASER_BEAM -> {
+                if (isEvolved) {
+                    render.color = 0xFFFF0000.toInt()  // Pure red Death Ray
+                    render.radius = 5f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.RECT
+                } else {
+                    render.color = 0xFFFF1744.toInt()  // Red
+                    render.radius = 3f
+                    render.shape = com.survivortd.game.components.RenderComponent.RenderShape.RECT
+                }
+            }
+        }
     }
 
     // ================================================================

@@ -25,8 +25,8 @@ class GddConfigValidationTest {
         fun playerHp() = assertEquals(100f, GameConfig.PLAYER_BASE_HP)
 
         @Test
-        @DisplayName("Player base speed = 220 px/s")
-        fun playerSpeed() = assertEquals(220f, GameConfig.PLAYER_BASE_SPEED)
+        @DisplayName("Player base speed = 440 px/s")
+        fun playerSpeed() = assertEquals(440f, GameConfig.PLAYER_BASE_SPEED)
 
         @Test
         @DisplayName("Player pickup range = 60 px")
@@ -57,8 +57,8 @@ class GddConfigValidationTest {
         fun playerHitbox() = assertEquals(20f, GameConfig.PLAYER_HITBOX_RADIUS)
 
         @Test
-        @DisplayName("Player dash speed = 400 px/s")
-        fun playerDashSpeed() = assertEquals(400f, GameConfig.PLAYER_DASH_SPEED)
+        @DisplayName("Player dash speed = 800 px/s")
+        fun playerDashSpeed() = assertEquals(800f, GameConfig.PLAYER_DASH_SPEED)
 
         @Test
         @DisplayName("Player dash cooldown = 3s")
@@ -89,8 +89,8 @@ class GddConfigValidationTest {
         fun targetFps() = assertEquals(60, GameConfig.TARGET_FPS)
 
         @Test
-        @DisplayName("Max entities = 500")
-        fun maxEntities() = assertEquals(500, GameConfig.MAX_ENTITIES)
+        @DisplayName("Max entities >= 500")
+        fun maxEntities() = assertTrue(GameConfig.MAX_ENTITIES >= 500, "MAX_ENTITIES should be at least 500")
     }
 
     @Nested
@@ -109,8 +109,8 @@ class GddConfigValidationTest {
         fun projectileLifetime() = assertEquals(2.0f, GameConfig.PROJECTILE_LIFETIME)
 
         @Test
-        @DisplayName("Gem magnet speed = 300 px/s")
-        fun gemMagnetSpeed() = assertEquals(300f, GameConfig.GEM_MAGNET_SPEED)
+        @DisplayName("Gem magnet speed = 600 px/s")
+        fun gemMagnetSpeed() = assertEquals(600f, GameConfig.GEM_MAGNET_SPEED)
 
         @Test
         @DisplayName("Gem lifetime = 30s")

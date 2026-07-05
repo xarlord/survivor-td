@@ -157,6 +157,27 @@ class EnemyAISystemTest {
                 "Spitter at ideal range should kite or reposition, got ${state.enemies[spitterId].aiState}"
             )
         }
+
+        @Test
+        @DisplayName("#110: Spitter fires projectile at player when at ideal range")
+        fun spitterFiresProjectile() {
+            val playerPos = state.positions[state.playerIndex]
+            val spitterId = state.spawnEnemy(
+                x = playerPos.x + 250f, y = playerPos.y,
+                enemyType = EnemyComponent.EnemyData.SPITTER
+            )
+            // Run AI for enough time to trigger the 1.5s fire timer
+            for (i in 0 until 120) {
+                ai.update(0.016f)  // ~1.92 seconds total
+            }
+            // Check that a projectile was spawned heading toward the player
+            val projectiles = (0 until state.projectiles.size).count {
+                state.tags.getOrNull(it)?.tag == TagComponent.EntityTag.PROJECTILE &&
+                !state.healths[it].isDead
+            }
+            assertTrue(projectiles > 0,
+                "Spitter should have fired at least 1 projectile toward player")
+        }
     }
 
     // ================================================================
@@ -377,6 +398,21 @@ class EnemyAISystemTest {
             // Velocity should remain at default (0)
             assertEquals(0f, state.velocities[enemyId].x, 0.01f,
                 "Dead enemy should not move")
+        }
+
+        @Test
+        @DisplayName("#117: Overlapping enemies are pushed apart")
+        fun enemySeparation() {
+            // Spawn two enemies at the same position
+            val e1 = state.spawnEnemy(x = 100f, y = 100f, enemyType = EnemyComponent.EnemyData.ZOMBIE)
+            val e2 = state.spawnEnemy(x = 100f, y = 100f, enemyType = EnemyComponent.EnemyData.ZOMBIE)
+            ai.update(0.016f)
+            // After separation, they should no longer be at the exact same position
+            val dx = state.positions[e2].x - state.positions[e1].x
+            val dy = state.positions[e2].y - state.positions[e1].y
+            val distSq = dx * dx + dy * dy
+            assertTrue(distSq > 0.01,
+                "Overlapping enemies should be pushed apart, distSq=$distSq")
         }
     }
 }

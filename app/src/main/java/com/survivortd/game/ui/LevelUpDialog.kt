@@ -21,6 +21,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,22 +35,40 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.systems.UpgradeChoice
+import kotlinx.coroutines.delay
 
 /**
  * Level-Up Dialog — shows upgrade choices when the player levels up.
- * Overlays the entire screen, pausing gameplay until a choice is made.
+ * [#88] Translucent overlay — game continues behind it (Vampire Survivors style).
+ * 10-second timer auto-selects a random card if player doesn't choose.
  */
 @Composable
 fun LevelUpDialog(
     level: Int,
     choices: List<UpgradeChoice>,
     onChoiceSelected: (UpgradeChoice) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onTimeout: (UpgradeChoice) -> Unit = onChoiceSelected
 ) {
+    var timeRemaining by remember { mutableIntStateOf(10) }
+
+    // 10-second countdown with auto-select
+    LaunchedEffect(choices) {
+        timeRemaining = 10
+        for (i in 10 downTo 1) {
+            delay(1000)
+            timeRemaining = i - 1
+        }
+        // Auto-select first choice on timeout
+        if (choices.isNotEmpty()) {
+            onTimeout(choices.first())
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f)),
+            .background(Color.Black.copy(alpha = 0.4f)),  // Translucent — game visible behind
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -54,14 +77,26 @@ fun LevelUpDialog(
                 .fillMaxWidth(0.9f)
                 .padding(16.dp)
         ) {
-            // Title
-            Text(
-                text = "LEVEL UP!",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFFFFD700),
-                textAlign = TextAlign.Center
-            )
+            // Title + Timer
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "LEVEL UP!",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFFD700),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "${timeRemaining}s",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (timeRemaining <= 3) Color(0xFFFF1744) else Color.White.copy(alpha = 0.6f)
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Level $level — Choose an Upgrade",
@@ -71,8 +106,8 @@ fun LevelUpDialog(
             )
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Upgrade choices
-            choices.forEach { choice ->
+            // Upgrade choices (max 3 per GDD §6)
+            choices.take(3).forEach { choice ->
                 UpgradeCard(choice = choice) { onChoiceSelected(choice) }
                 Spacer(modifier = Modifier.height(10.dp))
             }

@@ -9,19 +9,18 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import kotlin.math.cos
-import kotlin.math.sin
 
 class ChapterAndWaveTest {
 
     private lateinit var state: GameState
     private lateinit var waveSys: WaveSystem
+    private val chapter = ChapterConfig.WASTELAND
 
     @BeforeEach
     fun setup() {
         state = GameState()
         state.spawnPlayer()
-        waveSys = WaveSystem(state, ChapterConfig.WASTELAND)
+        waveSys = WaveSystem(state, chapter)
     }
 
     @Nested
@@ -82,57 +81,60 @@ class ChapterAndWaveTest {
         @Test
         @DisplayName("Spawns enemies over time")
         fun spawnsEnemies() {
-            // Simulate 3 seconds of spawning
+            // Discrete wave system: auto-starts wave 1 on first update
+            waveSys.update(0.016f)
+            // Simulate a few seconds of spawning
             repeat(180) { waveSys.update(0.016f) }
             assertTrue(waveSys.totalSpawned > 0, "Should have spawned enemies")
         }
 
         @Test
-        @DisplayName("Spawn rate increases over time")
-        fun spawnRateIncreases() {
-            // Early game (minute 0): ~1 spawn per 1.5s
-            val earlySpawns = countSpawns(10f)
+        @DisplayName("Wave enemy count scales per wave")
+        fun waveEnemyCountScales() {
+            // Wave 1: base count
+            waveSys.startNextWave()
+            val wave1Remaining = state.waveEnemiesRemaining
 
-            // Advance to mid-game (3 min — before boss time)
-            state.elapsedSeconds = 180f
-            waveSys = WaveSystem(state, ChapterConfig.WASTELAND) // Fresh wave system
-            val midSpawns = countSpawns(10f)
+            // Advance to wave 3 by starting next waves
+            state.currentWave = 1
+            waveSys.startNextWave()
+            val wave2Remaining = state.waveEnemiesRemaining
 
-            assertTrue(midSpawns > earlySpawns,
-                "Spawn rate should increase over time: early=$earlySpawns, mid=$midSpawns")
+            state.currentWave = 2
+            waveSys.startNextWave()
+            val wave3Remaining = state.waveEnemiesRemaining
+
+            assertTrue(wave3Remaining > wave1Remaining,
+                "Wave 3 should have more enemies than wave 1: w1=$wave1Remaining, w3=$wave3Remaining")
+            assertTrue(wave2Remaining > wave1Remaining,
+                "Wave 2 should have more enemies than wave 1: w1=$wave1Remaining, w2=$wave2Remaining")
         }
 
         @Test
-        @DisplayName("Boss spawns at configured time")
+        @DisplayName("Boss spawns on boss wave")
         fun bossSpawns() {
-            state.elapsedSeconds = 0f
-            waveSys = WaveSystem(state, ChapterConfig.WASTELAND)
-            // Advance to 5 minutes
-            state.elapsedSeconds = 300f
-            waveSys.update(0.016f)
-            // Boss should be on the field
-            val hasBoss = state.enemies.any { it.type == EnemyComponent.EnemyData.BOSS }
-            assertTrue(hasBoss, "Boss should spawn at minute 5")
+            // Force to wave 5 (boss wave interval)
+            state.currentWave = 4
+            waveSys.startNextWave()
+
+            assertTrue(state.isBossWave, "Wave 5 should be a boss wave")
+            val hasBoss = state.enemies.any { it.type == chapter.bossType }
+            assertTrue(hasBoss, "Boss should spawn on boss wave")
         }
 
         @Test
         @DisplayName("Normal spawning pauses during boss")
         fun pausesDuringBoss() {
-            state.elapsedSeconds = 300f  // 5 min
-            waveSys.update(0.016f)  // Spawn boss
+            // Force to boss wave
+            state.currentWave = 4
+            waveSys.startNextWave()
+            assertTrue(state.isBossWave)
 
             val spawnedBeforePause = waveSys.totalSpawned
             // Simulate 5 seconds with boss alive
             repeat(300) { waveSys.update(0.016f) }
             assertEquals(spawnedBeforePause, waveSys.totalSpawned,
                 "No new enemies should spawn during boss fight")
-        }
-
-        private fun countSpawns(duration: Float): Int {
-            val before = waveSys.totalSpawned
-            val ticks = (duration / 0.016f).toInt()
-            repeat(ticks) { waveSys.update(0.016f) }
-            return waveSys.totalSpawned - before
         }
     }
 

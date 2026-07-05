@@ -116,4 +116,30 @@ class GameConfigTest {
             assertTrue(late < early, "Late game spawn interval should be shorter (more frequent)")
         }
     }
+
+    @Nested
+    @DisplayName("Armor Reduction (#108)")
+    inner class ArmorReductionTest {
+
+        @Test
+        fun `armor subtracts flat from damage`() {
+            assertEquals(5f, GameConfig.armorReduction(10f, 5f), 0.01f)
+        }
+
+        @Test
+        fun `armor fully absorbs damage when armor exceeds damage`() {
+            assertEquals(0f, GameConfig.armorReduction(3f, 10f), 0.01f)
+        }
+
+        @Test
+        fun `zero armor deals full damage`() {
+            assertEquals(20f, GameConfig.armorReduction(20f, 0f), 0.01f)
+        }
+
+        @Test
+        fun `armor never results in negative damage`() {
+            assertEquals(0f, GameConfig.armorReduction(0f, 0f), 0.01f)
+            assertEquals(0f, GameConfig.armorReduction(5f, 100f), 0.01f)
+        }
+    }
 }
