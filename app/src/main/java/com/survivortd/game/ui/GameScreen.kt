@@ -190,7 +190,6 @@ fun GameScreen(
     }
 
     // [#113] Initialize AudioManager with preloaded SFX
-    val context = LocalContext.current
     val audioManager = remember(context) {
         AudioManager.getInstance(context).also {
             AudioManager.SfxType.entries.forEach { sfx -> it.loadSfx(sfx) }
