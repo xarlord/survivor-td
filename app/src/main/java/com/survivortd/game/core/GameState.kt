@@ -2,12 +2,16 @@ package com.survivortd.game.core
 
 import com.survivortd.game.components.*
 import com.survivortd.game.config.GameConfig
+import com.survivortd.game.utils.ObjectPool
 
 /**
  * Mutable game state — read directly inside drawBehind lambdas for rendering.
  * NOT a Compose State object (would cause recomposition cascades).
  *
  * All entity data lives here as flat arrays/lists for cache-friendly iteration.
+ *
+ * Performance (#115): Object pools for frequently allocated components,
+ * entity cap enforcement per type, and active count tracking.
  */
 class GameState {
 
@@ -24,6 +28,37 @@ class GameState {
     val statusEffects = ArrayList<StatusEffectsComponent>(GameConfig.MAX_ENTITIES)
     val tags = ArrayList<TagComponent>(GameConfig.MAX_ENTITIES)
     val damageNumbers = ArrayList<com.survivortd.game.components.DamageNumberComponent>(200)
+
+    // === OBJECT POOLS (#115) — reduce GC pressure from frequent create/destroy ===
+    val projectilePool = ObjectPool(
+        factory = { ProjectileComponent() },
+        reset = { it.reset() },
+        initialSize = 200,
+        maxSize = 500
+    )
+    val pickupPool = ObjectPool(
+        factory = { PickupComponent() },
+        reset = { it.reset() },
+        initialSize = 100,
+        maxSize = 300
+    )
+    val statusEffectPool = ObjectPool(
+        factory = { StatusEffectsComponent() },
+        reset = { it.effects.clear() },
+        initialSize = 50,
+        maxSize = 200
+    )
+
+    // === ENTITY COUNT TRACKING (#115) ===
+    var activeEnemyCount: Int = 0
+        private set
+    var activeProjectileCount: Int = 0
+        private set
+    var activePickupCount: Int = 0
+        private set
+
+    // === HUD STRING BUILDER (#115) — avoid allocations in game loop ===
+    val hudStringBuilder = StringBuilder(64)
 
     // === NEXT ENTITY ID ===
     // [#47] Entity IDs ARE array indices — all component lists are parallel.
@@ -151,6 +186,7 @@ class GameState {
         damageScale: Float = 1f
     ): Int {
         if (positions.size >= GameConfig.MAX_ENTITIES) return -1
+        if (activeEnemyCount >= GameConfig.MAX_ENEMIES) return -1
         val id = nextEntityId()
         positions.add(PositionComponent(x = x, y = y))
         velocities.add(VelocityComponent(maxSpeed = 80f))
@@ -215,6 +251,7 @@ class GameState {
         towers.add(TowerComponent())  // Placeholder
         statusEffects.add(StatusEffectsComponent())
         tags.add(TagComponent(TagComponent.EntityTag.ENEMY))
+        activeEnemyCount++
         return id
     }
 
@@ -234,6 +271,7 @@ class GameState {
         pickupType: com.survivortd.game.config.PickupType = com.survivortd.game.config.PickupType.XP_GEM_SMALL
     ): Int {
         if (positions.size >= GameConfig.MAX_ENTITIES) return -1
+        if (activePickupCount >= GameConfig.MAX_PICKUPS) return -1
         val id = nextEntityId()
         positions.add(PositionComponent(x = x, y = y))
         velocities.add(VelocityComponent())
@@ -257,6 +295,7 @@ class GameState {
         towers.add(TowerComponent())    // Placeholder
         statusEffects.add(StatusEffectsComponent())
         tags.add(TagComponent(TagComponent.EntityTag.PICKUP))
+        activePickupCount++
         return id
     }
 
@@ -269,6 +308,7 @@ class GameState {
         y: Float
     ): Int {
         if (positions.size >= GameConfig.MAX_ENTITIES) return -1
+        if (activeProjectileCount >= GameConfig.MAX_PROJECTILES) return -1
         val id = nextEntityId()
         positions.add(PositionComponent(x = x, y = y))
         velocities.add(VelocityComponent())
@@ -289,6 +329,7 @@ class GameState {
         towers.add(TowerComponent())    // Placeholder
         statusEffects.add(StatusEffectsComponent())
         tags.add(TagComponent(TagComponent.EntityTag.PROJECTILE))
+        activeProjectileCount++
         return id
     }
 
@@ -306,10 +347,22 @@ class GameState {
         var i = healths.size - 1
         while (i >= 0) {
             if (i < healths.size && healths[i].isDead) {
-                // Track enemy kills
-                if (i < tags.size && tags[i].tag == TagComponent.EntityTag.ENEMY) {
-                    totalKills++
-                    killedEnemies++
+                // Track enemy kills and decrement type counters
+                if (i < tags.size) {
+                    when (tags[i].tag) {
+                        TagComponent.EntityTag.ENEMY -> {
+                            totalKills++
+                            killedEnemies++
+                            activeEnemyCount--
+                        }
+                        TagComponent.EntityTag.PROJECTILE -> {
+                            activeProjectileCount--
+                        }
+                        TagComponent.EntityTag.PICKUP -> {
+                            activePickupCount--
+                        }
+                        else -> {}
+                    }
                 }
                 positions.removeAt(i)
                 if (i < velocities.size) velocities.removeAt(i)
@@ -325,6 +378,10 @@ class GameState {
             }
             i--
         }
+        // Clamp counters to 0 (safety against edge cases)
+        activeEnemyCount = activeEnemyCount.coerceAtLeast(0)
+        activeProjectileCount = activeProjectileCount.coerceAtLeast(0)
+        activePickupCount = activePickupCount.coerceAtLeast(0)
         return killedEnemies
     }
 
@@ -345,6 +402,9 @@ class GameState {
         tags.clear()
         damageNumbers.clear()
         nextId = 0
+        activeEnemyCount = 0
+        activeProjectileCount = 0
+        activePickupCount = 0
         score = 0
         goldCollected = 0
         totalKills = 0

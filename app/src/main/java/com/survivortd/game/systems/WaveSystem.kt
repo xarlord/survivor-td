@@ -48,6 +48,9 @@ class WaveSystem(
     /** Enemies already spawned in current wave */
     private var waveSpawnCount = 0
 
+    // (#115) Spawn rate throttling — don't spawn more than N enemies per tick
+    private var spawnedThisTick = 0
+
     /**
      * Start a new wave. Call after game initialization or after intermission.
      */
@@ -91,6 +94,9 @@ class WaveSystem(
      */
     fun update(dt: Float) {
         if (state.isPaused || state.isGameOver) return
+
+        // (#115) Reset per-tick spawn counter
+        spawnedThisTick = 0
 
         // Tick down announcement timer
         if (state.waveAnnouncementTimer > 0f) {
@@ -151,8 +157,12 @@ class WaveSystem(
                 val waveInterval = (GameConfig.WAVE_DURATION_SECONDS - waveTimer) /
                     (waveSpawnQuota - waveSpawnCount).coerceAtLeast(1)
                 spawnTimer = waveInterval.coerceAtLeast(GameConfig.MIN_SPAWN_INTERVAL)
-                spawnEnemy()
-                waveSpawnCount++
+                // (#115) Frame-budget limiting: don't spawn more than MAX_SPAWN_PER_FRAME per tick
+                if (spawnedThisTick < GameConfig.MAX_SPAWN_PER_FRAME) {
+                    spawnEnemy()
+                    waveSpawnCount++
+                    spawnedThisTick++
+                }
             }
         }
     }

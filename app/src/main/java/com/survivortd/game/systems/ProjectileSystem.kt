@@ -6,7 +6,6 @@ import com.survivortd.game.components.ProjectileComponent
 import com.survivortd.game.components.TagComponent
 import com.survivortd.game.config.GameConfig
 import com.survivortd.game.core.GameState
-import kotlin.math.sqrt
 
 /**
  * Projectile System — moves projectiles, handles enemy collisions,
@@ -46,13 +45,15 @@ class ProjectileSystem(
                     val playerPos = state.positions[state.playerIndex]
                     val dx = playerPos.x - pos.x
                     val dy = playerPos.y - pos.y
-                    val dist = sqrt(dx * dx + dy * dy)
-                    if (dist < 30f) {
+                    val distSq = dx * dx + dy * dy
+                    // (#115) Use squared distance comparison instead of sqrt
+                    if (distSq < 900f) { // 30^2 = 900
                         // Reached player — expire
                         state.healths[i].currentHp = 0f
                         i++
                         continue
                     }
+                    val dist = kotlin.math.sqrt(distSq)
                     vel.x = (dx / dist) * kotlin.math.abs(vel.x).coerceAtLeast(200f)
                     vel.y = (dy / dist) * kotlin.math.abs(vel.y).coerceAtLeast(200f)
                     proj.lifetime = 1.5f
@@ -106,7 +107,8 @@ class ProjectileSystem(
 
     /**
      * Check collision between projectile and all enemies.
-     * Handles pierce, damage application, and hit-set tracking.
+     * (#115) Optimized: uses squared distances, pre-computed hit radius squared,
+     * and early exit if projectile is moving away from all remaining enemies.
      */
     private fun checkProjectileCollisions(
         projIndex: Int,
@@ -114,6 +116,15 @@ class ProjectileSystem(
         checkX: Float,
         checkY: Float
     ) {
+        // (#115) Pre-compute hit radius squared
+        val projRadius = if (projIndex < state.renders.size) state.renders[projIndex].radius else 4f
+        val hitRadius = 20f + projRadius
+        val hitRadiusSq = hitRadius * hitRadius
+
+        // (#115) Get projectile velocity direction for early exit optimization
+        val vel = if (projIndex < state.velocities.size) state.velocities[projIndex] else null
+        val hasVelocity = vel != null && (vel.x != 0f || vel.y != 0f)
+
         for (j in state.enemies.indices) {
             if (j >= state.tags.size) break
             if (state.tags[j].tag != TagComponent.EntityTag.ENEMY) continue
@@ -128,8 +139,15 @@ class ProjectileSystem(
             val dy = enemyPos.y - checkY
             val distSq = dx * dx + dy * dy
 
-            val hitRadius = 20f + (if (projIndex < state.renders.size) state.renders[projIndex].radius else 4f)
-            if (distSq <= hitRadius * hitRadius) {
+            // (#115) Early exit: if projectile moving in a direction and enemy is behind it
+            // + beyond hit radius, we can stop checking if distance is increasing
+            if (hasVelocity && distSq > hitRadiusSq * 16f) {
+                val velRef = vel!!
+                // Enemy is behind the projectile direction
+                if (dx * velRef.x + dy * velRef.y < 0f) continue
+            }
+
+            if (distSq <= hitRadiusSq) {
                 // Hit!
                 dealProjectileDamage(j, proj, projIndex)
 
