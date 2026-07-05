@@ -187,6 +187,8 @@ fun GameScreen(
     val statusEffectSystem = remember { com.survivortd.game.systems.StatusEffectSystem(gameState) }
     // [#119] HeroPassiveSystem — applies hero-specific passive bonuses.
     val heroPassiveSystem = remember { com.survivortd.game.systems.HeroPassiveSystem() }
+    // [#118] SpriteAnimationSystem — advances sprite frames at 60Hz.
+    val spriteAnimationSystem = remember { com.survivortd.game.systems.SpriteAnimationSystem(gameState) }
 
     // Resolve HeroId from string parameter
     val hero = remember(heroId) {
@@ -210,6 +212,17 @@ fun GameScreen(
     remember {
         if (gameState.playerIndex < 0) {
             gameState.spawnPlayer()
+        }
+        // [#118] Load sprite atlases synchronously on first composition.
+        // Graceful: if loading fails, spriteManager stays null and shapes are used.
+        if (gameState.spriteManager == null) {
+            try {
+                val mgr = com.survivortd.game.core.SpriteManager(context)
+                mgr.loadAll()
+                gameState.spriteManager = mgr
+            } catch (e: Exception) {
+                android.util.Log.w("SpritePipeline", "Sprite load failed, using fallback shapes", e)
+            }
         }
         gameState.heroId = hero.name
         // [#119] Apply hero passives and give hero's starting weapon.
@@ -248,6 +261,8 @@ fun GameScreen(
                 weaponSystem.update(effectiveDt)
                 projectileSystem.update(effectiveDt)
                 pickupSystem.update(effectiveDt)
+                // [#118] Sprite animation — advance frames after all movement/combat settled
+                spriteAnimationSystem.update(effectiveDt)
                 // Particles always update (even during hit-stop for visual continuity)
                 particleSystem.update(dt)
                 gameState.elapsedSeconds += effectiveDt
@@ -682,10 +697,14 @@ private fun DrawScope.drawEntities(state: GameState, culler: FrustumCuller) {
     val renders = state.renders
     val tags = state.tags
     val statusEffects = state.statusEffects
+    val sprites = state.sprites
     val triPath = androidx.compose.ui.graphics.Path()
     val diaPath = androidx.compose.ui.graphics.Path()
     val sinVal = kotlin.math.sin(state.elapsedSeconds * GameConfig.PICKUP_PULSE_SPEED)
     val pulse = (sinVal + 1f) * 0.5f
+
+    // [#118] Sprite manager reference for sprite rendering path
+    val spriteMgr = state.spriteManager
 
     for (i in positions.indices) {
         if (i >= healths.size || healths[i].isDead) continue
@@ -716,7 +735,58 @@ private fun DrawScope.drawEntities(state: GameState, culler: FrustumCuller) {
             radius = radius * (0.85f + pulse * 0.15f)
         }
 
-        // Draw shape — single path to avoid code duplication
+        // [#118] Sprite render path — draw bitmap using Compose DrawScope API.
+        if (spriteMgr != null && i < sprites.size) {
+            val sprite = sprites[i]
+            if (sprite.hasSprite) {
+                val frame = spriteMgr.getFrame(sprite.atlasId, sprite.animState, sprite.frameIndex)
+                if (frame != null) {
+                    val sheet = spriteMgr.getSheet(sprite.atlasId)
+                    if (sheet != null && sheet.bitmap != null) {
+                        // [#118] AGY review: scale dst to entity radius, not fixed 64x64
+                        val halfW = radius
+                        val halfH = radius * (frame.height.toFloat() / frame.width.toFloat())
+                        val srcOffset = androidx.compose.ui.unit.IntOffset(frame.srcRect.left, frame.srcRect.top)
+                        val srcSize = androidx.compose.ui.unit.IntSize(frame.width, frame.height)
+                        if (sprite.facingLeft) {
+                            // Flip horizontally by drawing mirrored
+                            withTransform({
+                                translate(left = px, top = py)
+                                scale(scaleX = -1f, scaleY = 1f)
+                                translate(left = -px, top = -py)
+                            }) {
+                                drawImage(
+                                    image = sheet.bitmap,
+                                    srcOffset = srcOffset,
+                                    srcSize = srcSize,
+                                    dstOffset = androidx.compose.ui.unit.IntOffset(
+                                        (px - halfW).toInt(), (py - halfH).toInt()
+                                    ),
+                                    dstSize = androidx.compose.ui.unit.IntSize(
+                                        (halfW * 2).toInt(), (halfH * 2).toInt()
+                                    )
+                                )
+                            }
+                        } else {
+                            drawImage(
+                                image = sheet.bitmap,
+                                srcOffset = srcOffset,
+                                srcSize = srcSize,
+                                dstOffset = androidx.compose.ui.unit.IntOffset(
+                                    (px - halfW).toInt(), (py - halfH).toInt()
+                                ),
+                                dstSize = androidx.compose.ui.unit.IntSize(
+                                    (halfW * 2).toInt(), (halfH * 2).toInt()
+                                )
+                            )
+                        }
+                        continue // Skip shape dispatch
+                    }
+                }
+            }
+        }
+
+        // Fallback: draw shape — original rendering path
         when (render.shape) {
             RenderComponent.RenderShape.CIRCLE -> {
                 drawCircle(

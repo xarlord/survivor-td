@@ -1,0 +1,60 @@
+{
+  "frames": {
+    "proj_bullet_0": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      }
+    },
+    "pickup_xp_small_0": {
+      "frame": {
+        "x": 16,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      }
+    },
+    "proj_laser_0": {
+      "frame": {
+        "x": 32,
+        "y": 0,
+        "w": 8,
+        "h": 32
+      }
+    },
+    "proj_rocket_0": {
+      "frame": {
+        "x": 48,
+        "y": 0,
+        "w": 12,
+        "h": 24
+      }
+    },
+    "pickup_xp_medium_0": {
+      "frame": {
+        "x": 64,
+        "y": 0,
+        "w": 24,
+        "h": 24
+      }
+    },
+    "pickup_xp_large_0": {
+      "frame": {
+        "x": 96,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      }
+    },
+    "pickup_health_0": {
+      "frame": {
+        "x": 128,
+        "y": 0,
+        "w": 20,
+        "h": 20
+      }
+    }
+  }
+}
