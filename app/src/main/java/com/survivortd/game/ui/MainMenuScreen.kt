@@ -32,7 +32,6 @@ fun MainMenuScreen(
     onHeroes: () -> Unit = {},
     onShop: () -> Unit = {},
     onSettings: () -> Unit = {}
-)
 ) {
     Box(
         modifier = Modifier
