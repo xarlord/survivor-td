@@ -30,10 +30,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.data.HeroId
@@ -66,7 +74,7 @@ fun HeroSelectScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0A0E1A))
+            .background(Color(0xFF0D0B10))
             .testTag("hero_select_screen"),
         contentAlignment = Alignment.Center
     ) {
@@ -88,17 +96,42 @@ fun HeroSelectScreen(
                     text = "← BACK",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF9E9E9E),
+                    color = Color(0xFFF3EFF7),
                     modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable(onClick = onBack)
+                        .background(Color(0xFF1C1921))
+                        .border(1.dp, Color(0xFFA832FF), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
                         .testTag("hero_back_button")
-                        .padding(8.dp)
                 )
                 Text(
                     text = "SELECT HERO",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF00E676)
+                    color = Color(0xFFF3EFF7),
+                    modifier = Modifier
+                        .drawBehind {
+                            drawIntoCanvas { canvas ->
+                                val paint = Paint().asFrameworkPaint().apply {
+                                    color = Color(0xFFA832FF).copy(alpha = 0.15f).toArgb()
+                                    setShadowLayer(
+                                        20.dp.toPx(),
+                                        0f,
+                                        0f,
+                                        Color(0xFFA832FF).toArgb()
+                                    )
+                                }
+                                val rect = android.graphics.RectF(0f, 0f, size.width, size.height)
+                                canvas.nativeCanvas.drawRoundRect(
+                                    rect,
+                                    8.dp.toPx(),
+                                    8.dp.toPx(),
+                                    paint
+                                )
+                            }
+                        }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 )
                 Spacer(modifier = Modifier.width(80.dp))
             }
@@ -143,9 +176,15 @@ fun HeroSelectScreen(
             val selected = heroes.find { it.name == selectedHero }
             if (selected != null && selected.name in unlockedHeroes) {
                 Text(
-                    text = "Starting weapon: ${selected.startingWeapon.displayName}",
+                    text = buildAnnotatedString {
+                        withStyle(style = SpanStyle(color = Color(0xFFFFD700))) {
+                            append("Starting weapon: ")
+                        }
+                        withStyle(style = SpanStyle(color = Color(0xFFA832FF))) {
+                            append(selected.startingWeapon.displayName)
+                        }
+                    },
                     fontSize = 14.sp,
-                    color = Color(0xFFFFD700),
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.testTag("hero_starting_weapon")
                 )
@@ -159,7 +198,7 @@ fun HeroSelectScreen(
         val canAfford = playerGold >= unlock.unlockCost
         AlertDialog(
             onDismissRequest = { unlockDialogHero = null },
-            containerColor = Color(0xFF1E1E2E),
+            containerColor = Color(0xFF1C1921),
             title = {
                 Text(
                     text = "Unlock ${hero.displayName}?",
@@ -212,7 +251,7 @@ fun HeroSelectScreen(
                     Text(
                         text = "UNLOCK",
                         color = if (canAfford || unlock.unlockCost == 0)
-                            Color(0xFF00E676) else Color(0xFF555555),
+                            Color(0xFF39FF14) else Color(0xFF555555),
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -239,17 +278,43 @@ private fun HeroCard(
     onClick: () -> Unit
 ) {
     val borderColor = when {
-        isSelected -> Color(0xFFFFD700)  // Gold border for selected
-        isUnlocked -> Color(0xFF00E676)  // Green border for unlocked
-        else -> Color(0xFF333A4D)        // Gray border for locked
+        isSelected -> Color(0xFFA832FF)  // Neon Violet
+        isUnlocked -> Color(0xFF39FF14)  // Neon Green
+        else -> Color(0xFF333A4D)        // Locked border
     }
     val borderWidth = if (isSelected) 3.dp else 2.dp
+
+    val glowModifier = if (isSelected) {
+        Modifier.drawBehind {
+            drawIntoCanvas { canvas ->
+                val paint = Paint().asFrameworkPaint().apply {
+                    color = Color(0xFFA832FF).copy(alpha = 0.15f).toArgb()
+                    setShadowLayer(
+                        20.dp.toPx(),
+                        0f,
+                        0f,
+                        Color(0xFFA832FF).toArgb()
+                    )
+                }
+                val rect = android.graphics.RectF(0f, 0f, size.width, size.height)
+                canvas.nativeCanvas.drawRoundRect(
+                    rect,
+                    12.dp.toPx(),
+                    12.dp.toPx(),
+                    paint
+                )
+            }
+        }
+    } else {
+        Modifier
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .then(glowModifier)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1E1E2E))
+            .background(Color(0xFF1C1921))
             .border(borderWidth, borderColor, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(12.dp)
@@ -295,7 +360,7 @@ private fun HeroCard(
         Text(
             text = hero.startingWeapon.displayName,
             fontSize = 11.sp,
-            color = Color(0xFF42A5F5),
+            color = Color(0xFFA832FF),
             fontWeight = FontWeight.Bold
         )
 
@@ -314,7 +379,7 @@ private fun HeroCard(
                 Text(
                     text = "✓ UNLOCKED",
                     fontSize = 11.sp,
-                    color = Color(0xFF00E676)
+                    color = Color(0xFF39FF14)
                 )
             }
         } else {

@@ -34,6 +34,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -1158,50 +1164,123 @@ private fun PauseOverlay(
             modifier = Modifier
                 .fillMaxWidth(0.7f)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF1E1E2E))
+                .background(Color(0xFF1C1921))
+                .border(1.dp, Color(0xFFA832FF), RoundedCornerShape(16.dp))
                 .padding(32.dp)
         ) {
             Text(
                 text = "PAUSED",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = Color(0xFFF3EFF7),
+                modifier = Modifier
+                    .drawBehind {
+                        drawIntoCanvas { canvas ->
+                            val paint = Paint().asFrameworkPaint().apply {
+                                color = Color(0xFFA832FF).copy(alpha = 0.2f).toArgb()
+                                setShadowLayer(
+                                    25.dp.toPx(),
+                                    0f,
+                                    0f,
+                                    Color(0xFFA832FF).toArgb()
+                                )
+                            }
+                            val rect = android.graphics.RectF(0f, 0f, size.width, size.height)
+                            canvas.nativeCanvas.drawRoundRect(
+                                rect,
+                                8.dp.toPx(),
+                                8.dp.toPx(),
+                                paint
+                            )
+                        }
+                    }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             )
             Spacer(modifier = Modifier.height(32.dp))
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF00E676))
-                    .clickable(onClick = onResume)
-                    .padding(vertical = 16.dp),
-                contentAlignment = Alignment.Center
+                    .drawBehind {
+                        drawIntoCanvas { canvas ->
+                            val paint = Paint().asFrameworkPaint().apply {
+                                color = Color(0xFF39FF14).copy(alpha = 0.15f).toArgb()
+                                setShadowLayer(
+                                    20.dp.toPx(),
+                                    0f,
+                                    0f,
+                                    Color(0xFF39FF14).toArgb()
+                                )
+                            }
+                            val rect = android.graphics.RectF(0f, 0f, size.width, size.height)
+                            canvas.nativeCanvas.drawRoundRect(
+                                rect,
+                                12.dp.toPx(),
+                                12.dp.toPx(),
+                                paint
+                            )
+                        }
+                    }
             ) {
-                Text(
-                    text = "▶  RESUME",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0A0E1A)
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF39FF14))
+                        .clickable(onClick = onResume)
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "▶  RESUME",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0D0B10)
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(16.dp))
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFFF1744))
-                    .clickable(onClick = onQuit)
-                    .padding(vertical = 16.dp),
-                contentAlignment = Alignment.Center
+                    .drawBehind {
+                        drawIntoCanvas { canvas ->
+                            val paint = Paint().asFrameworkPaint().apply {
+                                color = Color(0xFFFF1F44).copy(alpha = 0.15f).toArgb()
+                                setShadowLayer(
+                                    20.dp.toPx(),
+                                    0f,
+                                    0f,
+                                    Color(0xFFFF1F44).toArgb()
+                                )
+                            }
+                            val rect = android.graphics.RectF(0f, 0f, size.width, size.height)
+                            canvas.nativeCanvas.drawRoundRect(
+                                rect,
+                                12.dp.toPx(),
+                                12.dp.toPx(),
+                                paint
+                            )
+                        }
+                    }
             ) {
-                Text(
-                    text = "✕  QUIT",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFFF1F44))
+                        .clickable(onClick = onQuit)
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "✕  QUIT",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFF3EFF7)
+                    )
+                }
             }
         }
     }
@@ -1226,7 +1305,21 @@ private fun RunSummaryScreen(
     val timeString = "$mins:${secs.toString().padStart(2, '0')}"
 
     val titleText = if (isVictory) "VICTORY!" else "RUN OVER"
-    val titleColor = if (isVictory) Color(0xFF00E676) else Color(0xFFFF1744)
+    val titleColor = if (isVictory) Color(0xFF39FF14) else Color(0xFFFF1F44)
+    val titleGlowColor = if (isVictory) Color(0xFF39FF14) else Color(0xFFFF1F44)
+
+    @Composable
+    fun LocalStatRow(label: String, value: String) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(text = label, fontSize = 16.sp, color = Color(0xFFF3EFF7).copy(alpha = 0.7f))
+            Text(text = value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF3EFF7))
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -1239,42 +1332,90 @@ private fun RunSummaryScreen(
             modifier = Modifier
                 .fillMaxWidth(0.85f)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF1E1E2E))
+                .background(Color(0xFF1C1921))
+                .border(1.dp, Color(0xFFA832FF), RoundedCornerShape(16.dp))
                 .padding(32.dp)
         ) {
             Text(
                 text = titleText,
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
-                color = titleColor
+                color = titleColor,
+                modifier = Modifier
+                    .drawBehind {
+                        drawIntoCanvas { canvas ->
+                            val paint = Paint().asFrameworkPaint().apply {
+                                color = titleGlowColor.copy(alpha = 0.2f).toArgb()
+                                setShadowLayer(
+                                    25.dp.toPx(),
+                                    0f,
+                                    0f,
+                                    titleGlowColor.toArgb()
+                                )
+                            }
+                            val rect = android.graphics.RectF(0f, 0f, size.width, size.height)
+                            canvas.nativeCanvas.drawRoundRect(
+                                rect,
+                                8.dp.toPx(),
+                                8.dp.toPx(),
+                                paint
+                            )
+                        }
+                    }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            StatRow("⏱ Time", timeString)
-            StatRow("🏆 Level", "$level")
-            StatRow("💀 Kills", "$kills")
-            StatRow("🪙 Gold", "$gold")
+            LocalStatRow("⏱ Time", timeString)
+            LocalStatRow("🏆 Level", "$level")
+            LocalStatRow("💀 Kills", "$kills")
+            LocalStatRow("🪙 Gold", "$gold")
             if (isVictory) {
-                StatRow("🎁 Bonus", "+${GameConfig.GOLD_COMPLETION_BONUS} gold")
+                LocalStatRow("🎁 Bonus", "+${GameConfig.GOLD_COMPLETION_BONUS} gold")
             }
-            StatRow("⚔ Weapons", "$weapons")
+            LocalStatRow("⚔ Weapons", "$weapons")
             Spacer(modifier = Modifier.height(24.dp))
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF00E676))
-                    .clickable(onClick = onPlayAgain)
-                    .padding(vertical = 16.dp),
-                contentAlignment = Alignment.Center
+                    .drawBehind {
+                        drawIntoCanvas { canvas ->
+                            val paint = Paint().asFrameworkPaint().apply {
+                                color = Color(0xFF39FF14).copy(alpha = 0.15f).toArgb()
+                                setShadowLayer(
+                                    20.dp.toPx(),
+                                    0f,
+                                    0f,
+                                    Color(0xFF39FF14).toArgb()
+                                )
+                            }
+                            val rect = android.graphics.RectF(0f, 0f, size.width, size.height)
+                            canvas.nativeCanvas.drawRoundRect(
+                                rect,
+                                12.dp.toPx(),
+                                12.dp.toPx(),
+                                paint
+                            )
+                        }
+                    }
             ) {
-                Text(
-                    text = "▶  PLAY AGAIN",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0A0E1A)
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF39FF14))
+                        .clickable(onClick = onPlayAgain)
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "▶  PLAY AGAIN",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0D0B10)
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -1291,7 +1432,7 @@ private fun RunSummaryScreen(
                     text = "MENU",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = Color(0xFFF3EFF7)
                 )
             }
         }
