@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import com.survivortd.game.components.RenderComponent
 import com.survivortd.game.config.GameConfig
 import com.survivortd.game.config.WeaponType
+import com.survivortd.game.data.HeroId
 import com.survivortd.game.core.GameState
 import com.survivortd.game.core.GameLoop
 import androidx.compose.ui.platform.LocalContext
@@ -71,15 +72,17 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun GameScreen(
+    heroId: String = "COMMANDER",
     onExit: () -> Unit
 ) {
     val gameState = remember { GameState() }
-    GameScreen(gameState = gameState, onGameOver = onExit, onExit = onExit)
+    GameScreen(gameState = gameState, heroId = heroId, onGameOver = onExit, onExit = onExit)
 }
 
 @Composable
 fun GameScreen(
     gameState: GameState,
+    heroId: String = "COMMANDER",
     onGameOver: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier
@@ -166,6 +169,13 @@ fun GameScreen(
     val towerSystem = remember { com.survivortd.game.systems.TowerSystem(gameState) }
     // [#32] StatusEffectSystem — processes DoTs and CC. Was completely missing.
     val statusEffectSystem = remember { com.survivortd.game.systems.StatusEffectSystem(gameState) }
+    // [#119] HeroPassiveSystem — applies hero-specific passive bonuses.
+    val heroPassiveSystem = remember { com.survivortd.game.systems.HeroPassiveSystem() }
+
+    // Resolve HeroId from string parameter
+    val hero = remember(heroId) {
+        runCatching { HeroId.valueOf(heroId) }.getOrDefault(HeroId.DEFAULT)
+    }
 
     // [#113] Initialize AudioManager with preloaded SFX
     val context = LocalContext.current
@@ -186,9 +196,11 @@ fun GameScreen(
         if (gameState.playerIndex < 0) {
             gameState.spawnPlayer()
         }
-        // [#35] Player starts with ASSAULT_RIFLE per GDD §3.3 (Commander hero).
+        gameState.heroId = hero.name
+        // [#119] Apply hero passives and give hero's starting weapon.
+        heroPassiveSystem.initHero(hero, gameState)
         if (weaponSystem.weapons.isEmpty()) {
-            weaponSystem.addWeapon(WeaponType.ASSAULT_RIFLE)
+            weaponSystem.addWeapon(hero.startingWeapon)
         }
         true
     }
@@ -209,6 +221,8 @@ fun GameScreen(
 
                 // [#21] Wave system FIRST — spawns enemies for other systems to process
                 waveSystem.update(effectiveDt)
+                // [#119] Hero passives (must run before movement/combat for berserker/scout/shielder)
+                heroPassiveSystem.applyPassive(hero, gameState, effectiveDt)
                 // System update order: AI → Movement → Status → Combat → Towers → Weapons → Projectiles → Pickups
                 enemyAiSystem.update(effectiveDt)
                 movementSystem.update(effectiveDt)
@@ -382,8 +396,10 @@ fun GameScreen(
                     if (gameState.playerIndex < 0) {
                         gameState.spawnPlayer()
                     }
+                    gameState.heroId = hero.name
+                    heroPassiveSystem.initHero(hero, gameState)
                     if (weaponSystem.weapons.isEmpty()) {
-                        weaponSystem.addWeapon(WeaponType.ASSAULT_RIFLE)
+                        weaponSystem.addWeapon(hero.startingWeapon)
                     }
                 },
                 onMenu = {

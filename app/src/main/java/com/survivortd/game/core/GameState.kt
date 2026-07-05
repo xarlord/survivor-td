@@ -99,6 +99,10 @@ class GameState {
     // === LEVEL UP QUEUE ===
     var pendingLevelUps: Int = 0
 
+    // === HERO (#119) ===
+    /** Current hero ID name (maps to HeroId enum). */
+    var heroId: String = "COMMANDER"
+
     // === PLAYER INDEX (quick lookup) ===
     var playerIndex: Int = -1
 
@@ -424,6 +428,7 @@ class GameState {
         wavePauseTimer = 0f
         pendingLevelUps = 0
         playerIndex = -1
+        heroId = "COMMANDER"
         cameraX = 0f
         cameraY = 0f
         joystickX = 0f

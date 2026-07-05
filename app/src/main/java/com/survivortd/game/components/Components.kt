@@ -184,7 +184,37 @@ data class PlayerComponent(
     var dashCooldownTimer: Float = 0f,
     var isDashing: Boolean = false,
     var hasRevived: Boolean = false,
-    var magnetTimer: Float = 0f
+    var magnetTimer: Float = 0f,
+
+    // === Hero-specific fields (#119) ===
+    /** Base values before hero passive modifications (snapshot at game start). */
+    var baseDamageMultiplier: Float = 1f,
+    var baseMoveSpeed: Float = 220f,
+    var basePickupRange: Float = 60f,
+
+    /** Commander: +10% tower damage & range (flag for TowerSystem). */
+    var commanderBonus: Boolean = false,
+
+    /** Berserker: extra damage multiplier applied when HP < 30%. */
+    var berserkerActive: Boolean = false,
+
+    /** Engineer: max tower slots (default 8, Engineer gets 9). */
+    var maxTowers: Int = 8,
+
+    /** Engineer: tower cost multiplier (1.0f default, 0.8f for Engineer). */
+    var towerCostMultiplier: Float = 1f,
+
+    /** Medic: healing items strength multiplier (1.5f for Medic). */
+    var healingBonus: Float = 1f,
+
+    /** Shielder: cooldown timer for damage reduction cycle (10s). */
+    var shieldCooldownTimer: Float = 0f,
+
+    /** Shielder: remaining time on damage reduction buff (2s when active). */
+    var damageReductionTimer: Float = 0f,
+
+    /** Shielder: damage reduction while active (0.5f = 50% less damage). */
+    var armorReduction: Float = 0f
 )
 
 /**
