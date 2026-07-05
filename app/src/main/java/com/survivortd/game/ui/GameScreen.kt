@@ -1,5 +1,6 @@
 package com.survivortd.game.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -90,6 +91,11 @@ fun GameScreen(
 
     // [#94] Pause state
     var isPaused by remember { mutableStateOf(false) }
+
+    // [#112] System back button pauses the game
+    BackHandler(enabled = true) {
+        isPaused = true
+    }
 
     // [#89] Run summary (death screen) state
     var showRunSummary by remember { mutableStateOf(false) }
