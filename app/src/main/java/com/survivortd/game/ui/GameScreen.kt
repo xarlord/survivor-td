@@ -106,6 +106,7 @@ fun GameScreen(
     var summaryLevel by remember { mutableIntStateOf(1) }
     var summaryTime by remember { mutableLongStateOf(0L) }
     var summaryWeapons by remember { mutableIntStateOf(0) }
+    var summaryIsVictory by remember { mutableStateOf(false) }
     var hudFps by remember { mutableIntStateOf(0) }
 
     // [#97] Wave HUD state
@@ -152,7 +153,7 @@ fun GameScreen(
     val particleSystem = remember { com.survivortd.game.systems.ParticleSystem(gameState) }
     val gameFeelSystem = remember { com.survivortd.game.systems.GameFeelSystem() }
     val movementSystem = remember { com.survivortd.game.systems.MovementSystem(gameState) }
-    val combatSystem = remember { com.survivortd.game.systems.CombatSystem(gameState, gameFeelSystem) }
+    val combatSystem = remember { com.survivortd.game.systems.CombatSystem(gameState, gameFeelSystem, com.survivortd.game.systems.MetaProgression()) }
     val enemyAiSystem = remember { com.survivortd.game.systems.EnemyAISystem(gameState) }
     val pickupSystem = remember { com.survivortd.game.systems.PickupSystem(gameState, particleSystem) }
     val projectileSystem = remember {
@@ -373,6 +374,7 @@ fun GameScreen(
                 level = summaryLevel,
                 timeSeconds = summaryTime,
                 weapons = summaryWeapons,
+                isVictory = summaryIsVictory,
                 onPlayAgain = {
                     showRunSummary = false
                     gameState.reset()
@@ -410,6 +412,21 @@ fun GameScreen(
             // Check for level-up → generate choices (game continues, no pause)
             if (gameState.pendingLevelUps > 0 && levelUpChoices.isEmpty()) {
                 levelUpChoices = levelUpSystem.generateChoices()
+            }
+
+            // [#116] Victory condition — survived 15 minutes
+            if (!gameState.isGameOver && !gameState.isVictory && gameState.elapsedSeconds >= GameConfig.MATCH_DURATION_SECONDS) {
+                gameState.isVictory = true
+                gameState.isGameOver = true
+                gameState.gameOverHandled = true
+                summaryKills = gameState.totalKills
+                summaryGold = gameState.goldCollected + GameConfig.GOLD_COMPLETION_BONUS
+                summaryLevel = hudLevel
+                summaryTime = 0L
+                summaryWeapons = weaponSystem.weapons.size
+                summaryIsVictory = true
+                delay(1000)
+                showRunSummary = true
             }
 
             // [#89] Game over — capture stats and show run summary
@@ -1051,11 +1068,15 @@ private fun RunSummaryScreen(
     level: Int,
     timeSeconds: Long,
     weapons: Int,
+    isVictory: Boolean = false,
     onPlayAgain: () -> Unit,
     onMenu: () -> Unit
 ) {
     val mins = (900 - timeSeconds) / 60
     val secs = (900 - timeSeconds) % 60
+
+    val titleText = if (isVictory) "VICTORY!" else "RUN OVER"
+    val titleColor = if (isVictory) Color(0xFF00E676) else Color(0xFFFF1744)
 
     Box(
         modifier = Modifier
@@ -1072,10 +1093,10 @@ private fun RunSummaryScreen(
                 .padding(32.dp)
         ) {
             Text(
-                text = "RUN OVER",
+                text = titleText,
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFFFF1744)
+                color = titleColor
             )
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -1083,6 +1104,9 @@ private fun RunSummaryScreen(
             StatRow("🏆 Level", "$level")
             StatRow("💀 Kills", "$kills")
             StatRow("🪙 Gold", "$gold")
+            if (isVictory) {
+                StatRow("🎁 Bonus", "+${GameConfig.GOLD_COMPLETION_BONUS} gold")
+            }
             StatRow("⚔ Weapons", "$weapons")
             Spacer(modifier = Modifier.height(24.dp))
 
