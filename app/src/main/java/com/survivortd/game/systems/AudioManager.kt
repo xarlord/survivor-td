@@ -113,13 +113,15 @@ class AudioManager private constructor(
      */
     fun loadSfx(type: SfxType) {
         if (isSilent) return
+        val ctx = context ?: return
+        val pool = soundPool ?: return
         try {
-            context!!.assets.openFd(type.fileName).use { afd ->
-                val id = soundPool!!.load(afd, 1)
+            ctx.assets.openFd(type.fileName).use { afd ->
+                val id = pool.load(afd, 1)
                 soundIds[type] = id
             }
         } catch (e: Exception) {
-            // File not found — silent mode for this SFX
+            // File not found — skip this SFX
         }
     }
 

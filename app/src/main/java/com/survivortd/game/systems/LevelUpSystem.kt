@@ -200,10 +200,16 @@ class LevelUpSystem(
                 choice.weaponType?.let { weaponSystem.upgradeWeapon(it) }
             }
             UpgradeType.NEW_PASSIVE -> {
-                choice.passiveType?.let { weaponSystem.addPassive(it) }
+                choice.passiveType?.let {
+                    weaponSystem.addPassive(it)
+                    applyPassiveStatEffect(it)
+                }
             }
             UpgradeType.UPGRADE_PASSIVE -> {
-                choice.passiveType?.let { weaponSystem.addPassive(it) }
+                choice.passiveType?.let {
+                    weaponSystem.addPassive(it)
+                    applyPassiveStatEffect(it)
+                }
             }
             UpgradeType.HEAL -> {
                 if (state.playerIndex >= 0 && state.playerIndex < state.healths.size) {
@@ -222,6 +228,40 @@ class LevelUpSystem(
         state.pendingLevelUps = (state.pendingLevelUps - 1).coerceAtLeast(0)
     }
 
+    /**
+     * Apply immediate stat effects when a passive is picked up.
+     * Passives that modify multipliers (damage, AoE, etc.) are handled
+     * by WeaponSystem's getter methods at fire time.
+     */
+    private fun applyPassiveStatEffect(pt: PassiveType) {
+        if (state.playerIndex < 0) return
+        val pi = state.playerIndex
+        when (pt) {
+            PassiveType.ENERGY_DRINK -> {
+                // +10% move speed per stack
+                if (pi < state.players.size) {
+                    state.players[pi].moveSpeed *= 1.1f
+                }
+            }
+            PassiveType.REINFORCED_PLATING -> {
+                // +15 max HP per stack (also heals the bonus amount)
+                if (pi < state.healths.size) {
+                    val hp = state.healths[pi]
+                    hp.maxHp += 15f
+                    hp.currentHp = (hp.currentHp + 15f).coerceAtMost(hp.maxHp)
+                }
+            }
+            PassiveType.SHARP_EDGE -> {
+                // +15% crit damage per stack
+                if (pi < state.players.size) {
+                    val p = state.players[pi]
+                    p.critDamage += 0.15f
+                }
+            }
+            else -> { /* no immediate stat effect */ }
+        }
+    }
+
     private fun hasCatalyst(weaponType: WeaponType): Boolean {
         val catalystPassive = PassiveType.entries.find { it.catalystFor == weaponType }
             ?: return false
@@ -235,21 +275,17 @@ class LevelUpSystem(
     private fun passiveDescription(pt: PassiveType): String {
         return when (pt) {
             PassiveType.POWER_CORE -> "+15% damage per stack"
-            // TODO(#109): Align code effect to GDD §5.2 in future PR
             PassiveType.RAPID_LOADER -> "+10% attack speed per stack"
             PassiveType.ENERGY_DRINK -> "+10% move speed per stack"
-            // TODO(#109): Align code effect to GDD §5.2 in future PR
             PassiveType.HIGH_VOLTAGE -> "+15% orb speed per stack"
-            PassiveType.HEAVY_CALIBER -> "+25% projectile size per stack"
+            PassiveType.HEAVY_CALIBER -> "+20% AoE per stack"
             PassiveType.REINFORCED_PLATING -> "+15 max HP per stack"
-            // TODO(#109): Align code effect to GDD §5.2 in future PR
             PassiveType.CPU_UPGRADE -> "+10% attack speed per stack"
             PassiveType.CRYO_MODULE -> "+15% slow duration per stack"
             PassiveType.SHARP_EDGE -> "+15% crit damage per stack"
             PassiveType.EXPANDED_MAGAZINE -> "+1 projectile per stack"
             PassiveType.MED_KIT -> "+2 HP/sec regen per stack"
-            // TODO(#109): Align code effect to GDD §5.2 in future PR
-            PassiveType.BATTERY -> "+10% weapon area per stack"
+            PassiveType.BATTERY -> "+10% AoE per stack"
         }
     }
 

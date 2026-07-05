@@ -264,7 +264,8 @@ class ProjectileSystem(
         // (#111) Crit check — matches WeaponSystem behavior
         val playerComp = state.players.getOrNull(minOf(state.playerIndex, state.players.size - 1))
         val crit = playerComp != null && kotlin.random.Random.nextFloat() < playerComp.critChance
-        val finalDamage = if (crit) damage * 2f else damage
+        val critMult = if (playerComp != null) playerComp.critDamage else 1.5f
+        val finalDamage = if (crit) damage * critMult else damage
 
         health.currentHp -= finalDamage
 

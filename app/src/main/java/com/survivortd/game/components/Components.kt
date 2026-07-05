@@ -177,6 +177,7 @@ data class PlayerComponent(
     var damageMult: Float = 1f,
     var attackSpeedMult: Float = 1f,
     var critChance: Float = 0.05f,
+    var critDamage: Float = 1.5f,  // 1.5x = default crit multiplier
     var regen: Float = 0.5f,
     var moveSpeed: Float = 220f,
     var dashTimer: Float = 0f,
