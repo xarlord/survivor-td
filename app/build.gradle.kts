@@ -44,7 +44,6 @@ android {
     buildTypes {
         debug {
             isDebuggable = true
-            applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
         }
         release {

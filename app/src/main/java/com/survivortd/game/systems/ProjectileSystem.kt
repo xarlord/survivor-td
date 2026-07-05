@@ -16,9 +16,6 @@ class ProjectileSystem(
     private val particleSystem: ParticleSystem? = null,
     private val gameFeelSystem: GameFeelSystem? = null
 ) {
-    private val playerStartX = 0f  // Set on first boomerang update
-    private val playerStartY = 0f
-
     fun update(dt: Float) {
         if (state.isPaused || state.isGameOver) return
         if (state.playerIndex < 0) return
