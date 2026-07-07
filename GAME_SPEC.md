@@ -1379,35 +1379,35 @@ Balance conclusions from the simulation model:
 ## 26. DEVELOPMENT ROADMAP (Phased)
 
 ### 26.1 MVP Scope (First Playable — Week 1)
-- [ ] Core game loop: move, auto-attack, kill, XP, level up, choose upgrade
-- [ ] 3 weapons: Assault Rifle, Katana, Lightning Orb
-- [ ] 3 enemy types: Zombie, Runner, Brute
-- [ ] 1 hero: Commander
-- [ ] 1 chapter: Wasteland (15 min)
-- [ ] Leveling system with upgrade cards
-- [ ] Basic HP bar, XP bar, timer, joystick
-- [ ] Win/lose conditions
-- [ ] Basic SFX + 1 music track
+- [x] Core game loop: move, auto-attack, kill, XP, level up, choose upgrade
+- [x] 3 weapons: Assault Rifle, Katana, Lightning Orb
+- [x] 3 enemy types: Zombie, Runner, Brute
+- [x] 1 hero: Commander
+- [x] 1 chapter: Wasteland (15 min)
+- [x] Leveling system with upgrade cards
+- [x] Basic HP bar, XP bar, timer, joystick
+- [x] Win/lose conditions
+- [x] Basic SFX + 1 music track
 
 ### 26.2 Vertical Slice (Week 2)
-- [ ] All 12 weapons + evolutions
-- [ ] All 12 passive items
-- [ ] All 10 enemy types + boss
-- [ ] Tower system (6 types + upgrades)
-- [ ] 3 heroes
-- [ ] Build phase
-- [ ] Meta-progression (permanent upgrades)
-- [ ] Save system
-- [ ] Full audio
-- [ ] Settings menu
+- [x] All 12 weapons + evolutions
+- [x] All 12 passive items
+- [x] All 10 enemy types + boss
+- [x] Tower system (6 types + upgrades)
+- [x] 3 heroes
+- [x] Build phase
+- [x] Meta-progression (permanent upgrades)
+- [x] Save system
+- [x] Full audio
+- [x] Settings menu
 
 ### 26.3 Launch Scope (Week 3)
-- [ ] 5 chapters + 5 bosses
-- [ ] All 6 heroes
-- [ ] Monetization (rewarded ads + IAP)
+- [x] 5 chapters + 5 bosses
+- [x] All 6 heroes
+- [ ] Monetization (rewarded ads + IAP) — tracked as #9, #120 (post-MVP)
 - [ ] Daily challenges
 - [ ] Analytics
-- [ ] Polishing pass: game feel, particles, screen shake
+- [x] Polishing pass: game feel, particles, screen shake
 - [ ] Performance optimization
 
 ### 26.4 Post-Launch
