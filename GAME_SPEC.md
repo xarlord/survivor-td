@@ -1408,7 +1408,7 @@ Balance conclusions from the simulation model:
 - [ ] Daily challenges
 - [ ] Analytics
 - [x] Polishing pass: game feel, particles, screen shake
-- [ ] Performance optimization
+- [x] Performance optimization — object pooling, frustum culling, 60fps target (PR #127)
 
 ### 26.4 Post-Launch
 - [ ] Battle Pass system
