@@ -116,15 +116,9 @@ class SpriteManager(private val context: Context) {
     private fun loadBitmap(path: String): ImageBitmap? {
         return try {
             val options = BitmapFactory.Options().apply {
-                // [#118] AGY review: HARDWARE only on API 26+ and NOT in preview mode.
-                // For Compose, we convert to ImageBitmap which handles GPU memory.
-                inPreferredConfig = if (
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !isSoftwareContext
-                ) {
-                    android.graphics.Bitmap.Config.HARDWARE
-                } else {
-                    android.graphics.Bitmap.Config.ARGB_8888
-                }
+                // Force ARGB_8888 — HARDWARE bitmaps cannot be converted
+                // to ImageBitmap via .asImageBitmap() and return null silently.
+                inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
                 inMutable = false
             }
             context.assets.open(path).use { stream ->
