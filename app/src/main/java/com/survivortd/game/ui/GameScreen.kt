@@ -604,9 +604,10 @@ private fun GameCanvasView(
     ) {
         // Viewport: scale world to fill full screen height, center on player
         val scale = size.height / GameConfig.WORLD_HEIGHT
-        // Camera offset: center the player on screen + screen shake
-        val camX = gameState.cameraX * scale - size.width / 2f + gameFeelSystem.shakeOffsetX * scale
-        val camY = gameState.cameraY * scale - size.height / 2f + gameFeelSystem.shakeOffsetY * scale
+        // Camera offset: center the player on screen + screen shake.
+        // screenX = worldX * scale + camX. For player at cameraX: screenX = cameraX*scale + camX = width/2.
+        val camX = size.width / 2f - gameState.cameraX * scale + gameFeelSystem.shakeOffsetX * scale
+        val camY = size.height / 2f - gameState.cameraY * scale + gameFeelSystem.shakeOffsetY * scale
 
         // (#115) Frustum culler — compute world-space view bounds for off-screen skip
         val culler = FrustumCuller().apply {
@@ -619,16 +620,18 @@ private fun GameCanvasView(
             )
         }
 
-        withTransform({
-            translate(left = camX, top = camY)
-            scale(scale, scale)
-        }) {
-            drawGameBackground(gameState)
-            drawEntities(gameState, culler)
-            drawParticles(particleSystem, culler)
-            drawTowers(towerSystem, culler)
-            drawPlayerGlow(gameState)
-        }
+        // World→screen coordinate conversion (replaces broken withTransform).
+        // withTransform produces no visible output on some devices/emulators,
+        // so we pass screen-space coordinates directly to all draw calls.
+        val toScreenX: (Float) -> Float = { wx -> wx * scale + camX }
+        val toScreenY: (Float) -> Float = { wy -> wy * scale + camY }
+        val toScreenR: (Float) -> Float = { wr -> wr * scale }
+
+        drawGameBackground(gameState, toScreenX, toScreenY, toScreenR, scale, camX, camY)
+        drawEntities(gameState, culler, toScreenX, toScreenY, toScreenR)
+        drawParticles(particleSystem, culler, toScreenX, toScreenY, toScreenR)
+        drawTowers(towerSystem, culler, toScreenX, toScreenY, toScreenR)
+        drawPlayerGlow(gameState, toScreenX, toScreenY, toScreenR)
 
         // Damage flash overlay (screen-space, not world-space)
         if (gameFeelSystem.damageFlash > 0f) {
@@ -646,7 +649,15 @@ private fun GameCanvasView(
  * Draws the game background with parallax grid layers and theme-based colors.
  * Background changes based on elapsed game time (5 chapters).
  */
-private fun DrawScope.drawGameBackground(state: GameState) {
+private fun DrawScope.drawGameBackground(
+    state: GameState,
+    toScreenX: (Float) -> Float,
+    toScreenY: (Float) -> Float,
+    toScreenR: (Float) -> Float,
+    scale: Float,
+    camX: Float,
+    camY: Float
+) {
     // Theme based on game time — 5 chapters across 15 minutes
     val minute = state.elapsedSeconds / 60f
     val (baseColor, gridColor, _) = when {
@@ -657,17 +668,16 @@ private fun DrawScope.drawGameBackground(state: GameState) {
         else -> Triple(0xFF1A0F0F, 0xFF2A1818, "Final Bunker")
     }
 
+    // Fill entire canvas with background color
     drawRect(color = Color(baseColor))
 
-    // Parallax grid: 3 layers at different scroll speeds relative to camera
-    val scale = size.height / GameConfig.WORLD_HEIGHT
-    val camX = state.cameraX * scale - size.width / 2f
-    val camY = state.cameraY * scale - size.height / 2f
+    // Parallax grid: 3 layers at different scroll speeds relative to camera.
+    // All coordinates are in screen-space since we're no longer in a world transform.
 
-    // Layer 0 (distant): large features, slowest scroll (0.2x camera)
+    // Layer 0 (distant): large features, slowest scroll (0.2x camera offset)
     drawParallaxGrid(camX * 0.2f, camY * 0.2f, 200f, Color(0xFF1A1F22).copy(alpha = 0.4f))
 
-    // Layer 1 (mid): medium detail (0.5x camera)
+    // Layer 1 (mid): medium detail (0.5x camera offset)
     drawParallaxGrid(camX * 0.5f, camY * 0.5f, 120f, Color(gridColor.toLong()).copy(alpha = 0.5f))
 
     // Layer 2 (foreground): current grid, 1:1 with camera
@@ -697,7 +707,10 @@ private fun DrawScope.drawParallaxGrid(offsetX: Float, offsetY: Float, gridSize:
  * (#115) Iterates arrays directly with frustum culling to skip off-screen entities.
  * Pre-calculates values outside the loop. Reuses Path objects to avoid allocations.
  */
-private fun DrawScope.drawEntities(state: GameState, culler: FrustumCuller) {
+private fun DrawScope.drawEntities(
+    state: GameState, culler: FrustumCuller,
+    toScreenX: (Float) -> Float, toScreenY: (Float) -> Float, toScreenR: (Float) -> Float
+) {
     val positions = state.positions
     val healths = state.healths
     val renders = state.renders
@@ -731,7 +744,7 @@ private fun DrawScope.drawEntities(state: GameState, culler: FrustumCuller) {
         if (i < tags.size && tags[i].tag == com.survivortd.game.components.TagComponent.EntityTag.ENEMY
             && i < statusEffects.size && statusEffects[i].effects.isNotEmpty()
         ) {
-            drawStatusEffectGlow(Offset(px, py), radius, statusEffects[i].effects)
+            drawStatusEffectGlow(Offset(toScreenX(px), toScreenY(py)), toScreenR(radius), statusEffects[i].effects)
         }
 
         // (#91) Pulse animation for pickups — pre-calculated outside loop
@@ -741,6 +754,11 @@ private fun DrawScope.drawEntities(state: GameState, culler: FrustumCuller) {
             radius = radius * (0.85f + pulse * 0.15f)
         }
 
+        // Convert to screen-space for all draw calls
+        val sx = toScreenX(px)
+        val sy = toScreenY(py)
+        val sr = toScreenR(radius)
+
         // [#118] Sprite render path — draw bitmap using Compose DrawScope API.
         if (spriteMgr != null && i < sprites.size) {
             val sprite = sprites[i]
@@ -749,95 +767,75 @@ private fun DrawScope.drawEntities(state: GameState, culler: FrustumCuller) {
                 if (frame != null) {
                     val sheet = spriteMgr.getSheet(sprite.atlasId)
                     if (sheet != null && sheet.bitmap != null) {
-                        // [#118] AGY review: scale dst to entity radius, not fixed 64x64
-                        val halfW = radius
-                        val halfH = radius * (frame.height.toFloat() / frame.width.toFloat())
+                        // Scale dst to entity radius in screen-space
+                        val halfW = sr
+                        val halfH = sr * (frame.height.toFloat() / frame.width.toFloat())
                         val srcOffset = androidx.compose.ui.unit.IntOffset(frame.srcRect.left, frame.srcRect.top)
                         val srcSize = androidx.compose.ui.unit.IntSize(frame.width, frame.height)
-                        if (sprite.facingLeft) {
-                            // Flip horizontally by drawing mirrored
-                            withTransform({
-                                translate(left = px, top = py)
-                                scale(scaleX = -1f, scaleY = 1f)
-                                translate(left = -px, top = -py)
-                            }) {
-                                drawImage(
-                                    image = sheet.bitmap,
-                                    srcOffset = srcOffset,
-                                    srcSize = srcSize,
-                                    dstOffset = androidx.compose.ui.unit.IntOffset(
-                                        (px - halfW).toInt(), (py - halfH).toInt()
-                                    ),
-                                    dstSize = androidx.compose.ui.unit.IntSize(
-                                        (halfW * 2).toInt(), (halfH * 2).toInt()
-                                    )
-                                )
-                            }
-                        } else {
-                            drawImage(
-                                image = sheet.bitmap,
-                                srcOffset = srcOffset,
-                                srcSize = srcSize,
-                                dstOffset = androidx.compose.ui.unit.IntOffset(
-                                    (px - halfW).toInt(), (py - halfH).toInt()
-                                ),
-                                dstSize = androidx.compose.ui.unit.IntSize(
-                                    (halfW * 2).toInt(), (halfH * 2).toInt()
-                                )
+                        // No facingLeft flip for now — direct drawImage in screen-space
+                        drawImage(
+                            image = sheet.bitmap,
+                            srcOffset = srcOffset,
+                            srcSize = srcSize,
+                            dstOffset = androidx.compose.ui.unit.IntOffset(
+                                (sx - halfW).toInt(), (sy - halfH).toInt()
+                            ),
+                            dstSize = androidx.compose.ui.unit.IntSize(
+                                (halfW * 2).toInt(), (halfH * 2).toInt()
                             )
-                        }
+                        )
                         continue // Skip shape dispatch
                     }
                 }
             }
         }
 
-        // Fallback: draw shape — original rendering path
+        // Fallback: draw shape — screen-space coordinates
         when (render.shape) {
             RenderComponent.RenderShape.CIRCLE -> {
                 drawCircle(
                     color = Color(colorInt.toLong()),
-                    radius = radius,
-                    center = Offset(px, py)
+                    radius = sr,
+                    center = Offset(sx, sy)
                 )
             }
             RenderComponent.RenderShape.RECT -> {
                 drawRect(
                     color = Color(colorInt.toLong()),
-                    topLeft = Offset(px - radius, py - radius),
-                    size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2)
+                    topLeft = Offset(sx - sr, sy - sr),
+                    size = androidx.compose.ui.geometry.Size(sr * 2, sr * 2)
                 )
             }
             RenderComponent.RenderShape.TRIANGLE -> {
                 triPath.reset()
-                triPath.moveTo(px, py - radius)
-                triPath.lineTo(px - radius, py + radius)
-                triPath.lineTo(px + radius, py + radius)
+                triPath.moveTo(sx, sy - sr)
+                triPath.lineTo(sx - sr, sy + sr)
+                triPath.lineTo(sx + sr, sy + sr)
                 triPath.close()
                 drawPath(triPath, color = Color(colorInt.toLong()))
             }
             RenderComponent.RenderShape.DIAMOND -> {
                 diaPath.reset()
-                diaPath.moveTo(px, py - radius)
-                diaPath.lineTo(px + radius, py)
-                diaPath.lineTo(px, py + radius)
-                diaPath.lineTo(px - radius, py)
+                diaPath.moveTo(sx, sy - sr)
+                diaPath.lineTo(sx + sr, sy)
+                diaPath.lineTo(sx, sy + sr)
+                diaPath.lineTo(sx - sr, sy)
                 diaPath.close()
                 drawPath(diaPath, color = Color(colorInt.toLong()))
             }
             // (#91) CROSS shape for health pickups
             RenderComponent.RenderShape.CROSS -> {
-                val armWidth = radius * 0.35f
+                val armWidth = sr * 0.35f
                 val crossColor = Color(colorInt.toLong())
                 drawRect(
                     color = crossColor,
-                    topLeft = Offset(px - armWidth, py - radius),
-                    size = androidx.compose.ui.geometry.Size(armWidth * 2, radius * 2)
+                    topLeft = Offset(sx - armWidth, sy - sr),
+                    size = androidx.compose.ui.geometry.Size(armWidth * 2, sr * 2)
                 )
                 drawRect(
                     color = crossColor,
-                    topLeft = Offset(px - radius, py - armWidth),
-                    size = androidx.compose.ui.geometry.Size(radius * 2, armWidth * 2)
+                    topLeft = Offset(sx - sr, sy - armWidth),
+                    size = androidx.compose.ui.geometry.Size(sr * 2, armWidth * 2)
                 )
             }
         }
@@ -886,7 +884,7 @@ private fun DrawScope.drawStatusEffectGlow(
         val colorInt = drawStatusEffectGlowColor(effect.type) ?: return@let
         drawCircle(
             color = Color(colorInt.toLong()).copy(alpha = 0.5f),
-            radius = radius + 4f,
+            radius = radius + 4f * radius / 20f, // proportional glow in screen-space
             center = center
         )
     }
@@ -894,7 +892,7 @@ private fun DrawScope.drawStatusEffectGlow(
         val colorInt = drawStatusEffectGlowColor(effect.type) ?: return@let
         drawCircle(
             color = Color(colorInt.toLong()).copy(alpha = 0.3f),
-            radius = radius + 7f,
+            radius = radius + 7f * radius / 20f, // proportional glow in screen-space
             center = center
         )
     }
@@ -907,7 +905,8 @@ private fun DrawScope.drawStatusEffectGlow(
  */
 private fun DrawScope.drawParticles(
     particleSystem: com.survivortd.game.systems.ParticleSystem,
-    culler: FrustumCuller
+    culler: FrustumCuller,
+    toScreenX: (Float) -> Float, toScreenY: (Float) -> Float, toScreenR: (Float) -> Float
 ) {
     val particles = particleSystem.particles
     for (i in particles.indices) {
@@ -917,8 +916,8 @@ private fun DrawScope.drawParticles(
         val alpha = (p.life / p.maxLife).coerceIn(0f, 1f)
         drawCircle(
             color = Color(p.color.toLong()).copy(alpha = alpha),
-            radius = p.size * alpha, // Shrink as they fade
-            center = Offset(p.x, p.y)
+            radius = toScreenR(p.size * alpha), // Shrink as they fade, in screen-space
+            center = Offset(toScreenX(p.x), toScreenY(p.y))
         )
     }
 }
@@ -930,7 +929,8 @@ private fun DrawScope.drawParticles(
  */
 private fun DrawScope.drawTowers(
     towerSystem: com.survivortd.game.systems.TowerSystem,
-    culler: FrustumCuller
+    culler: FrustumCuller,
+    toScreenX: (Float) -> Float, toScreenY: (Float) -> Float, toScreenR: (Float) -> Float
 ) {
     for (tower in towerSystem.towers) {
         if (!culler.isVisible(tower.x, tower.y)) continue
@@ -942,16 +942,16 @@ private fun DrawScope.drawTowers(
             com.survivortd.game.config.TowerType.POISON_TOWER -> Color(0xFF76FF03)
             com.survivortd.game.config.TowerType.ROCKET_POD -> Color(0xFFFF4500)
         }
-        val center = Offset(tower.x, tower.y)
+        val center = Offset(toScreenX(tower.x), toScreenY(tower.y))
         // Base platform (dark circle)
-        drawCircle(color = Color(0xFF1A1F33), radius = 22f, center = center)
+        drawCircle(color = Color(0xFF1A1F33), radius = toScreenR(22f), center = center)
         // Tower body
-        drawCircle(color = color, radius = 14f, center = center)
+        drawCircle(color = color, radius = toScreenR(14f), center = center)
         // Level indicator (small ring)
         if (tower.level >= 2) {
             drawCircle(
                 color = color,
-                radius = 18f,
+                radius = toScreenR(18f),
                 center = center,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
             )
@@ -959,7 +959,7 @@ private fun DrawScope.drawTowers(
         if (tower.level >= 3) {
             drawCircle(
                 color = Color.White.copy(alpha = 0.4f),
-                radius = 22f,
+                radius = toScreenR(22f),
                 center = center,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
             )
@@ -971,15 +971,18 @@ private fun DrawScope.drawTowers(
  * Draws a pulsing glow around the player for visibility.
  * Pulse rate ~2Hz based on elapsed seconds.
  */
-private fun DrawScope.drawPlayerGlow(state: GameState) {
+private fun DrawScope.drawPlayerGlow(
+    state: GameState,
+    toScreenX: (Float) -> Float, toScreenY: (Float) -> Float, toScreenR: (Float) -> Float
+) {
     if (state.playerIndex < 0) return
     val pos = state.positions[state.playerIndex]
     val pulse = (kotlin.math.sin(state.elapsedSeconds * 4f) + 1f) * 0.5f // 0..1
-    val glowRadius = 24f + pulse * 6f
+    val glowRadius = toScreenR(24f + pulse * 6f)
     drawCircle(
         color = Color(0xFF00E676).copy(alpha = 0.15f + pulse * 0.1f),
         radius = glowRadius,
-        center = Offset(pos.x, pos.y)
+        center = Offset(toScreenX(pos.x), toScreenY(pos.y))
     )
 }
 
