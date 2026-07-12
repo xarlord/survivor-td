@@ -5,10 +5,9 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import kotlin.math.abs
+import kotlin.math.sqrt
 
-/**
- * Tests for VirtualJoystick — touch-to-vector conversion, deadzone, release.
- */
 class VirtualJoystickTest {
 
     private lateinit var state: GameState
@@ -17,7 +16,7 @@ class VirtualJoystickTest {
     @BeforeEach
     fun setup() {
         state = GameState()
-        joystick = VirtualJoystick(state, deadzone = 0.12f, maxRadius = 120f)
+        joystick = VirtualJoystick(state, deadzone = 0.15f, maxRadius = 100f)
     }
 
     @Test
@@ -39,8 +38,8 @@ class VirtualJoystickTest {
     @DisplayName("Drag beyond deadzone produces movement vector")
     fun dragProducesVector() {
         joystick.onTouchDown(200f, 400f)
-        joystick.onTouchMove(260f, 400f)  // 60px right = 0.5 magnitude
-        assertTrue(state.joystickX > 0f, "Joystick X should be positive (dragging right)")
+        joystick.onTouchMove(280f, 400f) // 80px right of 100 radius
+        assertTrue(state.joystickX > 0.3f, "Joystick X should be solidly positive, got ${state.joystickX}")
         assertTrue(abs(state.joystickY) < 0.1f, "Joystick Y should be ~0")
     }
 
@@ -48,7 +47,7 @@ class VirtualJoystickTest {
     @DisplayName("Drag within deadzone produces no movement")
     fun deadzoneSuppressesSmallDrag() {
         joystick.onTouchDown(200f, 400f)
-        joystick.onTouchMove(205f, 405f)  // 7px = under deadzone (0.12 * 120 = 14.4)
+        joystick.onTouchMove(205f, 405f) // ~7px < 15 deadzone
         assertEquals(0f, state.joystickX, 0.01f)
         assertEquals(0f, state.joystickY, 0.01f)
     }
@@ -69,8 +68,8 @@ class VirtualJoystickTest {
     @DisplayName("Vector magnitude is clamped to 1.0")
     fun magnitudeClamped() {
         joystick.onTouchDown(200f, 400f)
-        joystick.onTouchMove(500f, 400f)  // 300px drag, much larger than maxRadius (120)
-        val mag = kotlin.math.sqrt(state.joystickX * state.joystickX + state.joystickY * state.joystickY)
+        joystick.onTouchMove(500f, 400f)
+        val mag = sqrt(state.joystickX * state.joystickX + state.joystickY * state.joystickY)
         assertTrue(mag <= 1.01f, "Magnitude should be clamped to 1.0, got $mag")
     }
 
@@ -78,9 +77,9 @@ class VirtualJoystickTest {
     @DisplayName("Diagonal drag produces proportional X and Y")
     fun diagonalDrag() {
         joystick.onTouchDown(200f, 400f)
-        joystick.onTouchMove(260f, 460f)  // 60px right, 60px down
-        val mag = kotlin.math.sqrt(state.joystickX * state.joystickX + state.joystickY * state.joystickY)
-        assertTrue(mag > 0.5f, "Diagonal should produce significant magnitude")
+        joystick.onTouchMove(280f, 480f)
+        val mag = sqrt(state.joystickX * state.joystickX + state.joystickY * state.joystickY)
+        assertTrue(mag > 0.4f, "Diagonal should produce significant magnitude")
         assertTrue(abs(state.joystickX - state.joystickY) < 0.15f,
             "X and Y should be roughly equal for 45-degree drag")
     }
@@ -93,5 +92,36 @@ class VirtualJoystickTest {
         assertEquals(0f, state.joystickY)
     }
 
-    private fun abs(f: Float) = kotlin.math.abs(f)
+    @Test
+    @DisplayName("Analog: half-radius drag yields partial magnitude")
+    fun analogPartialMagnitude() {
+        joystick.setMaxRadius(100f)
+        joystick.onTouchDown(0f, 0f)
+        // deadzone 15px; usable span 85px; drag to 15+42.5=57.5 → ~0.5 mag
+        joystick.onTouchMove(58f, 0f)
+        val mag = sqrt(state.joystickX * state.joystickX + state.joystickY * state.joystickY)
+        assertTrue(mag in 0.35f..0.75f, "Expected mid magnitude, got $mag")
+    }
+
+    @Test
+    @DisplayName("Double-tap touch-down requests dash once")
+    fun doubleTapDash() {
+        val t0 = 1_000_000L
+        joystick.onTouchDown(10f, 10f, pointerId = 1, nowMs = t0)
+        assertFalse(joystick.isDashRequested())
+        joystick.onTouchUp(1)
+        joystick.onTouchDown(12f, 12f, pointerId = 1, nowMs = t0 + 120)
+        assertTrue(joystick.consumeDashRequest())
+        assertFalse(joystick.consumeDashRequest(), "dash is one-shot")
+    }
+
+    @Test
+    @DisplayName("Ignores move from a different pointer id")
+    fun ignoresOtherPointer() {
+        joystick.onTouchDown(200f, 400f, pointerId = 7)
+        joystick.onTouchMove(300f, 400f, pointerId = 99)
+        assertEquals(0f, state.joystickX, 0.01f)
+        joystick.onTouchMove(300f, 400f, pointerId = 7)
+        assertTrue(state.joystickX > 0f)
+    }
 }

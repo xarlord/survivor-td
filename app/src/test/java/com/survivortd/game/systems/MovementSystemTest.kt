@@ -106,4 +106,34 @@ class MovementSystemTest {
         movement.update(1f)
         assertEquals(state.positions[state.playerIndex].x, state.cameraX, 1f)
     }
+
+    @Test
+    @DisplayName("Analog stick magnitude scales speed (#162)")
+    fun analogScalesSpeed() {
+        val start = state.positions[state.playerIndex].x
+        state.joystickX = 0.5f
+        state.joystickY = 0f
+        movement.update(1f)
+        val halfDelta = state.positions[state.playerIndex].x - start
+        // ~110 px at half stick (220 * 0.5)
+        assertEquals(110f, halfDelta, 8f, "half stick should move ~half speed")
+    }
+
+    @Test
+    @DisplayName("Dash request from joystick applies dash speed once")
+    fun dashFromJoystick() {
+        val joy = VirtualJoystick(state)
+        val mov = MovementSystem(state, joy)
+        joy.onTouchDown(0f, 0f, nowMs = 1000L)
+        joy.onTouchUp()
+        joy.onTouchDown(0f, 0f, nowMs = 1100L)
+        assertTrue(joy.isDashRequested())
+        state.joystickX = 1f
+        val start = state.positions[state.playerIndex].x
+        mov.update(0.1f)
+        val delta = state.positions[state.playerIndex].x - start
+        // dash 400 * 0.1 = 40
+        assertTrue(delta > 30f, "dash should move farther than walk: delta=$delta")
+        assertFalse(joy.isDashRequested(), "dash consumed")
+    }
 }

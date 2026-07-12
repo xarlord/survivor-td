@@ -187,7 +187,8 @@ fun GameScreen(
     val particleSystem = remember { com.survivortd.game.systems.ParticleSystem(gameState) }
     val gameFeelSystem = remember { com.survivortd.game.systems.GameFeelSystem() }
     val combatSystem = remember { CombatSystem(gameState, gameFeelSystem, metaProgression.value) }
-    val movementSystem = remember { com.survivortd.game.systems.MovementSystem(gameState) }
+    // Pass joystick so dash double-tap is consumed correctly (#162)
+    val movementSystem = remember { com.survivortd.game.systems.MovementSystem(gameState, joystick) }
     val enemyAiSystem = remember { com.survivortd.game.systems.EnemyAISystem(gameState) }
     val pickupSystem = remember { com.survivortd.game.systems.PickupSystem(gameState, particleSystem) }
     val projectileSystem = remember {
@@ -633,13 +634,27 @@ private fun GameCanvasView(
             .fillMaxSize()
             .background(Color(0xFF0A0E1A))
             .pointerInput(buildPhaseActive, selectedTower) {
+                // Density-aware stick radius (#162)
+                val radius = minOf(size.width, size.height) * VirtualJoystick.RADIUS_SCREEN_FRACTION
+                joystick.setMaxRadius(radius)
+
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
-                        val change = event.changes.first()
-                        val pos = change.position
+                        // Prefer the pointer that owns the stick; else first changed
+                        val changes = event.changes
+                        val ownerId = joystick.activePointerId()
+                        val change = when {
+                            ownerId >= 0 ->
+                                changes.firstOrNull { it.id.value.toLong() == ownerId }
+                                    ?: changes.firstOrNull()
+                            else -> changes.firstOrNull()
+                        } ?: continue
 
-                        // Build phase placement: tap (not drag) places selected tower
+                        val pos = change.position
+                        val pid = change.id.value.toLong()
+
+                        // Build phase placement: press start places tower (tap)
                         if (buildPhaseActive && selectedTower != null &&
                             change.pressed && change.previousPressed.not()
                         ) {
@@ -659,22 +674,26 @@ private fun GameCanvasView(
                         }
 
                         when {
-                            change.pressed && !joystick.active() -> {
-                                // During build+selected, skip joystick on initial place taps
+                            change.pressed && change.previousPressed.not() && !joystick.active() -> {
                                 if (buildPhaseActive && selectedTower != null) continue
-                                joystick.onTouchDown(pos.x, pos.y)
+                                joystick.onTouchDown(pos.x, pos.y, pointerId = pid)
                                 onJoystickActiveChange(true)
                                 onJoystickAnchorChange(Offset(pos.x, pos.y))
                                 onJoystickKnobChange(Offset(pos.x, pos.y))
+                                change.consume()
                             }
                             change.pressed && joystick.active() -> {
-                                joystick.onTouchMove(pos.x, pos.y)
+                                joystick.onTouchMove(pos.x, pos.y, pointerId = pid)
                                 val (kx, ky) = joystick.knobPosition()
                                 onJoystickKnobChange(Offset(kx, ky))
+                                change.consume()
                             }
                             !change.pressed && joystick.active() -> {
-                                joystick.onTouchUp()
-                                onJoystickActiveChange(false)
+                                joystick.onTouchUp(pointerId = pid)
+                                if (!joystick.active()) {
+                                    onJoystickActiveChange(false)
+                                }
+                                change.consume()
                             }
                         }
                     }
