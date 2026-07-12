@@ -234,6 +234,15 @@ fun GameScreen(
                 android.util.Log.w("SpritePipeline", "Sprite load failed, using fallback shapes", e)
             }
         }
+        if (gameState.backgroundManager == null) {
+            try {
+                val bg = com.survivortd.game.core.BackgroundManager(context)
+                bg.loadAll()
+                gameState.backgroundManager = bg
+            } catch (e: Exception) {
+                android.util.Log.w("BackgroundPipeline", "Background load failed, using solid colors", e)
+            }
+        }
         gameState.heroId = hero.name
         // [#119] Apply hero passives and give hero's starting weapon.
         heroPassiveSystem.initHero(hero, gameState)
@@ -702,8 +711,8 @@ private fun GameCanvasView(
 }
 
 /**
- * Draws the game background with parallax grid layers and theme-based colors.
- * Background changes based on elapsed game time (5 chapters).
+ * Draws the game background: chapter bitmap (parallax scroll) + fallback grid.
+ * GDD § art — themed chapter arenas; bitmaps under assets/backgrounds/.
  */
 private fun DrawScope.drawGameBackground(
     state: GameState,
@@ -714,7 +723,6 @@ private fun DrawScope.drawGameBackground(
     camX: Float,
     camY: Float
 ) {
-    // Theme based on game time — 5 chapters across 15 minutes
     val minute = state.elapsedSeconds / 60f
     val (baseColor, gridColor, _) = when {
         minute < 3f -> Triple(0xFF1A150F, 0xFF2A2018, "Wasteland")
@@ -724,20 +732,36 @@ private fun DrawScope.drawGameBackground(
         else -> Triple(0xFF1A0F0F, 0xFF2A1818, "Final Bunker")
     }
 
-    // Fill entire canvas with background color
+    // Solid fallback under bitmap
     drawRect(color = Color(baseColor))
 
-    // Parallax grid: 3 layers at different scroll speeds relative to camera.
-    // All coordinates are in screen-space since we're no longer in a world transform.
+    val chapter = state.backgroundManager?.chapterForMinutes(minute)
+    val img = chapter?.bitmap
+    if (img != null) {
+        // Tile bitmap with mild parallax so the arena feels larger than one screen
+        val tileW = size.width
+        val tileH = size.height
+        val scrollX = (camX * 0.15f) % tileW
+        val scrollY = (camY * 0.15f) % tileH
+        // Draw 2x2 tiles covering camera movement
+        for (ox in -1..1) {
+            for (oy in -1..1) {
+                drawImage(
+                    image = img,
+                    dstOffset = androidx.compose.ui.unit.IntOffset(
+                        (-scrollX + ox * tileW).toInt(),
+                        (-scrollY + oy * tileH).toInt()
+                    ),
+                    dstSize = androidx.compose.ui.unit.IntSize(tileW.toInt(), tileH.toInt()),
+                    alpha = 0.85f
+                )
+            }
+        }
+    }
 
-    // Layer 0 (distant): large features, slowest scroll (0.2x camera offset)
-    drawParallaxGrid(camX * 0.2f, camY * 0.2f, 200f, Color(0xFF1A1F22).copy(alpha = 0.4f))
-
-    // Layer 1 (mid): medium detail (0.5x camera offset)
-    drawParallaxGrid(camX * 0.5f, camY * 0.5f, 120f, Color(gridColor.toLong()).copy(alpha = 0.5f))
-
-    // Layer 2 (foreground): current grid, 1:1 with camera
-    drawParallaxGrid(camX, camY, 80f, Color(gridColor.toLong()).copy(alpha = 0.7f))
+    // Light grid on top for orientation
+    drawParallaxGrid(camX * 0.5f, camY * 0.5f, 120f, Color(gridColor.toLong()).copy(alpha = 0.25f))
+    drawParallaxGrid(camX, camY, 80f, Color(gridColor.toLong()).copy(alpha = 0.35f))
 }
 
 /**
