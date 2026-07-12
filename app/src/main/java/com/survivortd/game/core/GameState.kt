@@ -34,6 +34,7 @@ class GameState {
     // Set once on IO dispatcher, read from game loop on Dispatchers.Default.
     @Volatile
     var spriteManager: SpriteManager? = null
+    var backgroundManager: BackgroundManager? = null
 
     // === OBJECT POOLS (#115) — reduce GC pressure from frequent create/destroy ===
     val projectilePool = ObjectPool(
