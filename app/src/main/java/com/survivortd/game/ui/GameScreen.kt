@@ -108,6 +108,10 @@ fun GameScreen(
     var hudTime by remember { mutableLongStateOf(0L) }
     var hudScore by remember { mutableLongStateOf(0L) }
     var hudGold by remember { mutableIntStateOf(0) }
+    var hudScrap by remember { mutableIntStateOf(0) }
+    var isBuildPhaseUi by remember { mutableStateOf(false) }
+    var buildPhaseSeconds by remember { mutableFloatStateOf(0f) }
+    var selectedTower by remember { mutableStateOf<com.survivortd.game.config.TowerType?>(null) }
 
     // [#94] Pause state
     var isPaused by remember { mutableStateOf(false) }
@@ -255,6 +259,8 @@ fun GameScreen(
 
                 // [#21] Wave system FIRST — spawns enemies for other systems to process
                 waveSystem.update(effectiveDt)
+                // Sync build phase flag for TowerSystem + UI
+                towerSystem.isBuildPhase = waveSystem.isBuildPhase
                 // [#119] Hero passives (must run before movement/combat for berserker/scout/shielder)
                 heroPassiveSystem.applyPassive(hero, gameState, effectiveDt)
                 // System update order: AI → Movement → Status → Combat → Towers → Weapons → Projectiles → Pickups
@@ -335,6 +341,11 @@ fun GameScreen(
             onJoystickAnchorChange = { joystickAnchor = it },
             onJoystickKnobChange = { joystickKnob = it },
             redrawTrigger = redrawTrigger,
+            buildPhaseActive = isBuildPhaseUi,
+            selectedTower = selectedTower,
+            onPlaceTower = { type, wx, wy ->
+                towerSystem.placeTower(type, wx, wy)
+            },
             modifier = Modifier.fillMaxSize()
         )
 
@@ -369,6 +380,21 @@ fun GameScreen(
                     textAlign = TextAlign.Center
                 )
             }
+        }
+
+        // === LAYER 2b: Build Phase Overlay (#147) ===
+        if (isBuildPhaseUi) {
+            BuildPhaseOverlay(
+                scrap = hudScrap,
+                towersPlaced = towerSystem.towers.size,
+                maxTowers = towerSystem.maxTowers,
+                remainingSeconds = buildPhaseSeconds,
+                selected = selectedTower,
+                onSelect = { selectedTower = it },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 8.dp)
+            )
         }
 
         // === LAYER 3: Level-Up Dialog (non-blocking, game continues) ===
@@ -492,11 +518,17 @@ fun GameScreen(
                 hudXp = if (player.xpToNext > 0)
                     player.currentXp.toFloat() / player.xpToNext.toFloat() else 0f
                 hudGold = player.gold
+                hudScrap = player.scrap
             }
             hudTime = (900 - gameState.elapsedSeconds).toLong().coerceAtLeast(0)
             hudScore = gameState.score
             hudWave = gameState.currentWave
             hudWaveText = if (gameState.waveAnnouncementTimer > 0f) gameState.waveAnnouncementText else ""
+            isBuildPhaseUi = waveSystem.isBuildPhase
+            buildPhaseSeconds = waveSystem.buildPhaseRemaining
+            if (!waveSystem.isBuildPhase) {
+                selectedTower = null
+            }
 
             // Check for level-up → generate choices (game continues, no pause)
             if (gameState.pendingLevelUps > 0 && levelUpChoices.isEmpty()) {
@@ -564,6 +596,9 @@ private fun GameCanvasView(
     onJoystickAnchorChange: (Offset) -> Unit,
     onJoystickKnobChange: (Offset) -> Unit,
     redrawTrigger: Int,
+    buildPhaseActive: Boolean = false,
+    selectedTower: com.survivortd.game.config.TowerType? = null,
+    onPlaceTower: (com.survivortd.game.config.TowerType, Float, Float) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     // [#23] Read redrawTrigger so Compose knows to recompose when it changes
@@ -574,15 +609,36 @@ private fun GameCanvasView(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF0A0E1A))
-            .pointerInput(Unit) {
+            .pointerInput(buildPhaseActive, selectedTower) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.first()
                         val pos = change.position
 
+                        // Build phase placement: tap (not drag) places selected tower
+                        if (buildPhaseActive && selectedTower != null &&
+                            change.pressed && change.previousPressed.not()
+                        ) {
+                            val camX = if (gameState.playerIndex >= 0)
+                                gameState.positions[gameState.playerIndex].x
+                            else GameConfig.WORLD_WIDTH / 2f
+                            val camY = if (gameState.playerIndex >= 0)
+                                gameState.positions[gameState.playerIndex].y
+                            else GameConfig.WORLD_HEIGHT / 2f
+                            val (wx, wy) = BuildPlacement.screenToWorld(
+                                pos.x, pos.y, size.width.toFloat(), size.height.toFloat(),
+                                camX, camY
+                            )
+                            onPlaceTower(selectedTower, wx, wy)
+                            change.consume()
+                            continue
+                        }
+
                         when {
                             change.pressed && !joystick.active() -> {
+                                // During build+selected, skip joystick on initial place taps
+                                if (buildPhaseActive && selectedTower != null) continue
                                 joystick.onTouchDown(pos.x, pos.y)
                                 onJoystickActiveChange(true)
                                 onJoystickAnchorChange(Offset(pos.x, pos.y))

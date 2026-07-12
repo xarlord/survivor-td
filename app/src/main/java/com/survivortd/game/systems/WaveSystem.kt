@@ -36,6 +36,10 @@ class WaveSystem(
     var isBuildPhase = false
         private set
 
+    /** Seconds left in current build phase (0 if not building). */
+    val buildPhaseRemaining: Float
+        get() = if (isBuildPhase) buildPhaseTimer else 0f
+
     /** Total enemies spawned this match */
     var totalSpawned = 0
         private set
