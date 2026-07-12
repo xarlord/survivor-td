@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
@@ -377,7 +378,9 @@ fun GameScreen(
             fps = hudFps,
             wave = hudWave,
             waveText = hudWaveText,
-            modifier = Modifier.align(Alignment.TopCenter)
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
         )
 
         // [#97] Wave Announcement Overlay
@@ -735,26 +738,20 @@ private fun DrawScope.drawGameBackground(
     camY: Float
 ) {
     val minute = state.elapsedSeconds / 60f
-    val (baseColor, gridColor, _) = when {
-        minute < 3f -> Triple(0xFF1A150F, 0xFF2A2018, "Wasteland")
-        minute < 6f -> Triple(0xFF0F1A0F, 0xFF182A18, "Toxic Swamp")
-        minute < 9f -> Triple(0xFF0F0F1A, 0xFF18182A, "Abandoned City")
-        minute < 12f -> Triple(0xFF0F0F1A, 0xFF1A1A28, "Underground Lab")
-        else -> Triple(0xFF1A0F0F, 0xFF2A1818, "Final Bunker")
-    }
+    val baseColor = ArenaBackgroundStyle.chapterBaseColorArgb(minute)
+    val gridColor = ArenaBackgroundStyle.chapterGridColorArgb(minute)
 
-    // Solid fallback under bitmap
+    // Solid themed fallback under bitmap
     drawRect(color = Color(baseColor))
 
     val chapter = state.backgroundManager?.chapterForMinutes(minute)
     val img = chapter?.bitmap
     if (img != null) {
-        // Tile bitmap with mild parallax so the arena feels larger than one screen
+        // Full-bleed chapter art with mild parallax
         val tileW = size.width
         val tileH = size.height
-        val scrollX = (camX * 0.15f) % tileW
-        val scrollY = (camY * 0.15f) % tileH
-        // Draw 2x2 tiles covering camera movement
+        val scrollX = (camX * 0.12f) % tileW
+        val scrollY = (camY * 0.12f) % tileH
         for (ox in -1..1) {
             for (oy in -1..1) {
                 drawImage(
@@ -764,15 +761,30 @@ private fun DrawScope.drawGameBackground(
                         (-scrollY + oy * tileH).toInt()
                     ),
                     dstSize = androidx.compose.ui.unit.IntSize(tileW.toInt(), tileH.toInt()),
-                    alpha = 0.85f
+                    alpha = ArenaBackgroundStyle.CHAPTER_BITMAP_ALPHA
                 )
             }
         }
     }
 
-    // Light grid on top for orientation
-    drawParallaxGrid(camX * 0.5f, camY * 0.5f, 120f, Color(gridColor.toLong()).copy(alpha = 0.25f))
-    drawParallaxGrid(camX, camY, 80f, Color(gridColor.toLong()).copy(alpha = 0.35f))
+    // Soft orientation grid — must not dominate art (#157)
+    val g = Color(gridColor).copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_SECONDARY)
+    val g2 = Color(gridColor).copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_PRIMARY)
+    drawParallaxGrid(camX * 0.4f, camY * 0.4f, 140f, g)
+    drawParallaxGrid(camX, camY, 96f, g2)
+
+    // Gentle vignette so HUD/center stay readable over bright tiles
+    val vig = ArenaBackgroundStyle.VIGNETTE_ALPHA
+    drawRect(
+        brush = androidx.compose.ui.graphics.Brush.radialGradient(
+            colors = listOf(
+                Color.Transparent,
+                Color.Black.copy(alpha = vig * 0.55f)
+            ),
+            center = Offset(size.width * 0.5f, size.height * 0.45f),
+            radius = size.maxDimension * 0.72f
+        )
+    )
 }
 
 /**

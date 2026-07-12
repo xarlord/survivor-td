@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -21,12 +21,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.testTag
@@ -42,23 +45,28 @@ fun MainMenuScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0D0B10))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF1A0F18),
+                        Color(0xFF0D0B10),
+                        Color(0xFF0A1210)
+                    )
+                )
+            )
+            .statusBarsPadding()
             .testTag("main_menu")
     ) {
         Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 24.dp, end = 24.dp)
-                .background(Color(0xFF1C1921), RoundedCornerShape(8.dp))
-                .border(
-                    width = 1.dp,
-                    color = Color(0xFFA832FF),
-                    shape = RoundedCornerShape(8.dp)
-                )
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(top = 16.dp, end = 20.dp)
+                .background(Color(0xEE1C1921), RoundedCornerShape(10.dp))
+                .border(1.dp, Color(0xFFA832FF), RoundedCornerShape(10.dp))
+                .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            Text("G", fontSize = 16.sp, color = Color(0xFFFFD700))
-            Spacer(modifier = Modifier.width(4.dp))
+            Text("💰", fontSize = 14.sp)
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = "$gold",
                 fontSize = 16.sp,
@@ -73,22 +81,23 @@ fun MainMenuScreen(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(32.dp)
+                .padding(horizontal = 28.dp, vertical = 24.dp)
         ) {
             Text(
                 text = "SURVIVOR TD",
-                fontSize = 48.sp,
+                fontSize = 44.sp,
                 fontWeight = FontWeight.Black,
                 color = Color(0xFFF3EFF7),
+                textAlign = TextAlign.Center,
                 modifier = Modifier
                     .testTag("title")
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
                     .drawBehind {
                         drawIntoCanvas { canvas ->
                             val paint = Paint().asFrameworkPaint().apply {
-                                color = Color(0xFFFF1F44).copy(alpha = 0.15f).toArgb()
+                                color = Color(0xFFFF1F44).copy(alpha = 0.18f).toArgb()
                                 setShadowLayer(
-                                    25.dp.toPx(),
+                                    28.dp.toPx(),
                                     0f,
                                     0f,
                                     Color(0xFFFF1F44).toArgb()
@@ -104,24 +113,24 @@ fun MainMenuScreen(
                         }
                     }
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "Survive. Build. Evolve.",
-                fontSize = 16.sp,
-                color = Color(0xFFF3EFF7).copy(alpha = 0.7f)
+                fontSize = 15.sp,
+                color = Color(0xFFF3EFF7).copy(alpha = 0.75f)
             )
-            Spacer(modifier = Modifier.height(56.dp))
+            Spacer(modifier = Modifier.height(48.dp))
 
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.7f)
-                    .height(64.dp)
+                    .fillMaxWidth(0.78f)
+                    .height(60.dp)
                     .drawBehind {
                         drawIntoCanvas { canvas ->
                             val paint = Paint().asFrameworkPaint().apply {
                                 color = Color(0xFFFF1F44).toArgb()
                                 setShadowLayer(
-                                    20.dp.toPx(),
+                                    22.dp.toPx(),
                                     0f,
                                     0f,
                                     Color(0xFFFF1F44).toArgb()
@@ -130,42 +139,51 @@ fun MainMenuScreen(
                             val rect = android.graphics.RectF(0f, 0f, size.width, size.height)
                             canvas.nativeCanvas.drawRoundRect(
                                 rect,
-                                12.dp.toPx(),
-                                12.dp.toPx(),
+                                14.dp.toPx(),
+                                14.dp.toPx(),
                                 paint
                             )
                         }
                     }
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .clickable(onClick = onPlay)
                     .testTag("play_button"),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "PLAY",
-                    fontSize = 24.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFF3EFF7)
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 MenuButton(
-                    label = "Heroes", icon = "SWORD", onClick = onHeroes,
-                    modifier = Modifier.testTag("heroes_button")
+                    label = "Heroes",
+                    onClick = onHeroes,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("heroes_button")
                 )
                 MenuButton(
-                    label = "Upgrades", icon = "SHOP", onClick = onShop,
-                    modifier = Modifier.testTag("shop_button")
+                    label = "Upgrades",
+                    onClick = onShop,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("shop_button")
                 )
                 MenuButton(
-                    label = "Settings", icon = "GEAR", onClick = onSettings,
-                    modifier = Modifier.testTag("settings_button")
+                    label = "Settings",
+                    onClick = onSettings,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("settings_button")
                 )
             }
         }
@@ -175,27 +193,36 @@ fun MainMenuScreen(
 @Composable
 private fun MenuButton(
     label: String,
-    icon: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val icon = MenuCardLayout.shortIcon(label)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
         modifier = modifier
-            .background(Color(0xFF1C1921), RoundedCornerShape(12.dp))
-            .border(
-                width = 1.5.dp,
-                color = Color(0xFF39FF14),
-                shape = RoundedCornerShape(12.dp)
-            )
+            .height(92.dp)
+            .background(Color(0xEE1C1921), RoundedCornerShape(12.dp))
+            .border(1.5.dp, Color(0xFF39FF14), RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(16.dp)
-            .size(width = 100.dp, height = 80.dp),
-        verticalArrangement = Arrangement.Center
+            .padding(horizontal = 8.dp, vertical = 12.dp)
     ) {
-        Text(text = icon, fontSize = 14.sp, color = Color(0xFF39FF14), fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = label, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF3EFF7))
+        Text(
+            text = icon,
+            fontSize = MenuCardLayout.ICON_SP.sp,
+            color = Color(0xFF39FF14),
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = label,
+            fontSize = MenuCardLayout.LABEL_SP.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFF3EFF7),
+            maxLines = MenuCardLayout.MAX_LABEL_LINES,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
     }
 }

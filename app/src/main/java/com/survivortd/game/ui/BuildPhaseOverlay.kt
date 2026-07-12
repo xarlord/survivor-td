@@ -46,34 +46,37 @@ fun BuildPhaseOverlay(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xCC0A0E1A))
-            .padding(horizontal = 8.dp, vertical = 10.dp)
+            .background(Color(0xF00A0E1A), RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+            .border(1.dp, Color(0xFFFFD700).copy(alpha = 0.55f), RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+            .padding(horizontal = 10.dp, vertical = 12.dp)
             .testTag("build_phase_overlay"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = "BUILD PHASE  ·  ${remainingSeconds.toInt().coerceAtLeast(0)}s",
-            color = Color(0xFFFFD700),
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp,
+            color = Color(0xFFFFE082),
+            fontWeight = FontWeight.Black,
+            fontSize = 17.sp,
             modifier = Modifier.testTag("build_phase_timer")
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = "Scrap: $scrap  ·  Towers: $towersPlaced/$maxTowers",
-            color = Color(0xFFB0BEC5),
-            fontSize = 13.sp,
+            color = Color(0xFFECEFF1),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
             modifier = Modifier.testTag("build_phase_scrap")
         )
         if (selected != null) {
             Text(
                 text = "Tap map to place ${selected.displayName}",
-                color = Color(0xFF00E676),
-                fontSize = 12.sp,
+                color = Color(0xFF69F0AE),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 2.dp)
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
@@ -83,43 +86,43 @@ fun BuildPhaseOverlay(
                 val isSelected = selected == type
                 val borderColor = when {
                     isSelected -> Color(0xFFFFD700)
-                    canAfford -> Color(0xFF4CAF50)
-                    else -> Color(0xFF455A64)
+                    canAfford -> Color(0xFF69F0AE)
+                    else -> Color(0xFF546E7A)
                 }
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .width(52.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(2.dp, borderColor, RoundedCornerShape(8.dp))
+                        .width(54.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .border(2.dp, borderColor, RoundedCornerShape(10.dp))
                         .background(
-                            if (isSelected) Color(0xFF1B3A1B) else Color(0xFF1A2332)
+                            if (isSelected) Color(0xFF1B5E20) else Color(0xFF263238)
                         )
                         .clickable(enabled = canAfford) {
                             onSelect(if (isSelected) null else type)
                         }
-                        .padding(4.dp)
+                        .padding(vertical = 6.dp, horizontal = 4.dp)
                         .testTag("tower_btn_${type.name}")
                 ) {
                     Text(
                         text = towerEmoji(type),
-                        fontSize = 18.sp,
+                        fontSize = 20.sp,
                         textAlign = TextAlign.Center
                     )
                     Text(
                         text = type.baseCost.toString(),
-                        color = if (canAfford) Color.White else Color(0xFF78909C),
-                        fontSize = 10.sp,
+                        color = if (canAfford) Color.White else Color(0xFF90A4AE),
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
         }
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = "Select a tower, then tap the battlefield",
-            color = Color(0xFF78909C),
-            fontSize = 11.sp
+            color = Color(0xFFCFD8DC),
+            fontSize = 12.sp
         )
     }
 }
