@@ -2,35 +2,36 @@ package com.survivortd.game.systems
 
 import com.survivortd.game.components.EnemyComponent
 import com.survivortd.game.config.ChapterConfig
-import com.survivortd.game.config.GameBalance
 import com.survivortd.game.config.GameConfig
 import com.survivortd.game.core.GameState
-import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Wave System — manages discrete wave-based enemy spawning with announcements.
+ * Wave System — GDD §8 continuous spawning + timed bosses + build phases.
  *
- * Spawning logic:
- * - Discrete waves: each wave lasts WAVE_DURATION_SECONDS
- * - Enemy count scales per wave
- * - Brief intermission (WAVE_PAUSE_SECONDS) between waves
- * - Boss wave every BOSS_WAVE_INTERVAL waves
- * - Wave announcements displayed in HUD
- * - Difficulty scales per wave (HP, enemy count)
+ * - Continuous edge spawning (no discrete wave quotas)
+ * - Spawn interval scales with minutes elapsed
+ * - Bosses at minutes 5 / 10 / 15 (GameConfig.BOSS_TIMES_MINUTES)
+ * - Normal spawns pause briefly while boss is active
+ * - After boss death: 10s build phase (GameConfig.BUILD_PHASE_DURATION)
+ *
+ * [currentWave] is a display/meta counter: increments at each boss or each minute
+ * for HUD compatibility (WAVE N). Starts at 1 on first update.
  */
 class WaveSystem(
     private val state: GameState,
     private val chapter: ChapterConfig = ChapterConfig.WASTELAND
 ) {
     private var spawnTimer = 0f
-    private var waveTimer = 0f
+    private var spawnInterval = GameConfig.BASE_SPAWN_INTERVAL
 
-    // Boss tracking
     private var bossActive = false
     private var bossPauseTimer = 0f
     private var buildPhaseTimer = 0f
+    private val bossesTriggered = mutableSetOf<Int>()
+
+    private var started = false
+    private var spawnedThisTick = 0
 
     var isBuildPhase = false
         private set
@@ -39,74 +40,76 @@ class WaveSystem(
     var totalSpawned = 0
         private set
 
-    /** Enemies killed in current wave */
-    private var waveKillCount = 0
-
-    /** Total enemies to spawn in current wave */
-    private var waveSpawnQuota = 0
-
-    /** Enemies already spawned in current wave */
-    private var waveSpawnCount = 0
-
-    // (#115) Spawn rate throttling — don't spawn more than N enemies per tick
-    private var spawnedThisTick = 0
-
     /**
-     * Start a new wave. Call after game initialization or after intermission.
+     * Compatibility: previous discrete-wave API. In continuous mode this starts
+     * continuous combat if not already running and may force a boss if [state.currentWave]
+     * is a multiple of BOSS_WAVE_INTERVAL (tests). Prefer update() driven flow.
+     */
+    /**
+     * Compat API from discrete-wave era: increments [currentWave] then configures.
+     * Boss if currentWave % BOSS_WAVE_INTERVAL == 0.
      */
     fun startNextWave() {
+        started = true
         state.currentWave++
         state.wavePaused = false
         state.wavePauseTimer = 0f
-        waveTimer = 0f
-        waveSpawnCount = 0
-        waveKillCount = 0
-
-        // Boss every N waves
-        state.isBossWave = (state.currentWave % GameConfig.BOSS_WAVE_INTERVAL == 0)
+        state.isBossWave = state.currentWave > 0 &&
+            state.currentWave % GameConfig.BOSS_WAVE_INTERVAL == 0
 
         if (state.isBossWave) {
-            // Boss wave: spawn boss immediately, quota is just the boss
-            waveSpawnQuota = 1
             state.waveAnnouncementText = "⚠ BOSS INCOMING ⚠"
+            state.waveAnnouncementTimer = GameConfig.WAVE_ANNOUNCEMENT_DURATION
+            state.waveEnemiesRemaining = 1
+            if (!bossActive) {
+                spawnBossForMinute(state.currentWave)
+            }
         } else {
-            // Normal wave: scale enemy count
-            waveSpawnQuota = GameConfig.WAVE_ENEMY_BASE_COUNT +
-                (state.currentWave - 1) * GameConfig.WAVE_ENEMY_SCALE_PER_WAVE
             state.waveAnnouncementText = "WAVE ${state.currentWave}"
-        }
-
-        state.waveEnemiesRemaining = waveSpawnQuota
-        state.waveAnnouncementTimer = GameConfig.WAVE_ANNOUNCEMENT_DURATION
-
-        // Calculate spawn interval for this wave
-        val waveInterval = GameConfig.WAVE_DURATION_SECONDS / waveSpawnQuota.coerceAtLeast(1)
-        spawnTimer = 0f // Spawn first enemy immediately
-
-        if (state.isBossWave) {
-            spawnBossForWave()
-            waveSpawnCount++
+            state.waveAnnouncementTimer = GameConfig.WAVE_ANNOUNCEMENT_DURATION
+            state.waveEnemiesRemaining = GameConfig.WAVE_ENEMY_BASE_COUNT +
+                (state.currentWave - 1).coerceAtLeast(0) * GameConfig.WAVE_ENEMY_SCALE_PER_WAVE
+            spawnTimer = 0f
+            bossActive = false
         }
     }
 
-    /**
-     * Main update — called every tick.
-     */
     fun update(dt: Float) {
         if (state.isPaused || state.isGameOver) return
-
-        // (#115) Reset per-tick spawn counter
         spawnedThisTick = 0
 
-        // Tick down announcement timer
         if (state.waveAnnouncementTimer > 0f) {
             state.waveAnnouncementTimer -= dt
         }
 
-        // Handle boss active state
+        // First tick: enter combat
+        if (!started) {
+            started = true
+            state.currentWave = 1
+            state.waveAnnouncementText = "WAVE 1"
+            state.waveAnnouncementTimer = GameConfig.WAVE_ANNOUNCEMENT_DURATION
+            state.waveEnemiesRemaining = GameConfig.WAVE_ENEMY_BASE_COUNT
+            spawnTimer = 0f
+            return
+        }
+
+        // Build phase after boss (GDD §7)
+        if (isBuildPhase) {
+            buildPhaseTimer -= dt
+            state.waveAnnouncementText = "BUILD PHASE"
+            if (buildPhaseTimer <= 0f) {
+                isBuildPhase = false
+                state.waveAnnouncementText = "GET READY"
+                state.waveAnnouncementTimer = GameConfig.WAVE_PAUSE_SECONDS
+            }
+            return
+        }
+
+        // Boss alive: pause normal spawns
         if (bossActive) {
             if (isBossDead()) {
                 bossActive = false
+                state.isBossWave = false
                 buildPhaseTimer = GameConfig.BUILD_PHASE_DURATION
                 isBuildPhase = true
                 state.waveEnemiesRemaining = 0
@@ -116,86 +119,64 @@ class WaveSystem(
             return
         }
 
-        // Handle build phase (post-boss)
-        if (isBuildPhase) {
-            buildPhaseTimer -= dt
-            if (buildPhaseTimer <= 0f) {
-                isBuildPhase = false
-                startIntermission()
-            }
-            return
-        }
-
-        // Handle intermission between waves
+        // Brief ready after build / intermission flag
         if (state.wavePaused) {
             state.wavePauseTimer -= dt
             if (state.wavePauseTimer <= 0f) {
-                startNextWave()
+                state.wavePaused = false
             }
             return
         }
 
-        // If no wave active yet, start wave 1
-        if (state.currentWave == 0) {
-            startNextWave()
-            return
+        // Minute-based boss triggers (GDD §8.3)
+        val minutes = state.elapsedSeconds / 60f
+        for (bossMinute in GameConfig.BOSS_TIMES_MINUTES) {
+            if (minutes >= bossMinute && bossesTriggered.add(bossMinute)) {
+                state.currentWave = bossMinute
+                state.isBossWave = true
+                state.waveAnnouncementText = "⚠ BOSS INCOMING ⚠"
+                state.waveAnnouncementTimer = GameConfig.WAVE_ANNOUNCEMENT_DURATION
+                state.waveEnemiesRemaining = 1
+                spawnBossForMinute(bossMinute)
+                return
+            }
         }
 
-        // Wave timer — auto-advance when wave time expires or all enemies spawned+killed
-        waveTimer += dt
-        val allDone = waveSpawnCount >= waveSpawnQuota && state.waveEnemiesRemaining <= 0
+        // Continuous spawn (GDD §8.5)
+        // spawnInterval = max(0.3, base - minutes * 0.05)  OR rate scale
+        val scaled = GameConfig.BASE_SPAWN_INTERVAL /
+            (1f + minutes * GameConfig.ENEMY_SPAWN_RATE_SCALE).coerceAtLeast(0.01f)
+        spawnInterval = scaled.coerceAtLeast(GameConfig.MIN_SPAWN_INTERVAL)
 
-        if (waveTimer >= GameConfig.WAVE_DURATION_SECONDS || allDone) {
-            startIntermission()
-            return
+        spawnTimer += dt
+        while (spawnTimer >= spawnInterval && spawnedThisTick < GameConfig.MAX_SPAWN_PER_FRAME) {
+            spawnTimer -= spawnInterval
+            spawnEnemy()
+            spawnedThisTick++
+            if (state.waveEnemiesRemaining > 0) {
+                // Soft counter for HUD; continuous mode doesn't hard-stop on 0
+            }
         }
 
-        // Spawn enemies at calculated interval
-        if (waveSpawnCount < waveSpawnQuota) {
-            spawnTimer -= dt
-            if (spawnTimer <= 0f) {
-                val waveInterval = (GameConfig.WAVE_DURATION_SECONDS - waveTimer) /
-                    (waveSpawnQuota - waveSpawnCount).coerceAtLeast(1)
-                spawnTimer = waveInterval.coerceAtLeast(GameConfig.MIN_SPAWN_INTERVAL)
-                // (#115) Frame-budget limiting: don't spawn more than MAX_SPAWN_PER_FRAME per tick
-                if (spawnedThisTick < GameConfig.MAX_SPAWN_PER_FRAME) {
-                    spawnEnemy()
-                    waveSpawnCount++
-                    spawnedThisTick++
-                }
+        // Display wave number ≈ floor(minutes)+1 when not in boss minute
+        if (!state.isBossWave) {
+            val displayWave = (minutes.toInt() + 1).coerceAtLeast(1)
+            if (displayWave > state.currentWave && displayWave !in GameConfig.BOSS_TIMES_MINUTES) {
+                state.currentWave = displayWave
             }
         }
     }
 
-    /**
-     * Called when an enemy dies — track wave progress.
-     */
     fun onEnemyKilled() {
-        if (!state.isBossWave && state.waveEnemiesRemaining > 0) {
+        if (state.waveEnemiesRemaining > 0) {
             state.waveEnemiesRemaining--
         }
-        waveKillCount++
     }
 
-    /**
-     * Start intermission between waves.
-     */
-    private fun startIntermission() {
-        state.wavePaused = true
-        state.wavePauseTimer = GameConfig.WAVE_PAUSE_SECONDS
-        state.waveAnnouncementText = "GET READY"
-        state.waveAnnouncementTimer = GameConfig.WAVE_PAUSE_SECONDS
-        state.score += 50
-    }
-
-    /**
-     * Spawn a regular enemy from a random screen edge.
-     */
     private fun spawnEnemy() {
         val pool = chapter.getActivePool(state.elapsedSeconds)
         val enemyType = pickWeighted(pool)
 
-        // Spawn at random screen edge
         val edge = Random.nextInt(4)
         val (x, y) = when (edge) {
             0 -> Random.nextFloat() * GameConfig.WORLD_WIDTH to -30f
@@ -204,21 +185,23 @@ class WaveSystem(
             else -> GameConfig.WORLD_WIDTH + 30f to Random.nextFloat() * GameConfig.WORLD_HEIGHT
         }
 
-        // HP scaling: base time scaling + wave scaling
         val minutes = state.elapsedSeconds / 60f
-        val hpScale = (1f + minutes * GameConfig.ENEMY_HP_SCALE) *
-            (1f + state.currentWave * GameConfig.WAVE_HP_SCALE_PER_WAVE)
+        val hpScale = 1f + minutes * GameConfig.ENEMY_HP_SCALE
+        // Elite chance
+        var type = enemyType
+        val eliteChance = GameConfig.ELITE_BASE_CHANCE + minutes * GameConfig.ELITE_SCALE
+        if (Random.nextFloat() < eliteChance && type != EnemyComponent.EnemyData.BOSS) {
+            type = EnemyComponent.EnemyData.ELITE
+        }
 
-        state.spawnEnemy(x, y, enemyType, hpScale = hpScale)
+        state.spawnEnemy(x, y, type, hpScale = hpScale)
         totalSpawned++
     }
 
-    /**
-     * Spawn a boss for the current boss wave.
-     */
-    private fun spawnBossForWave() {
+    private fun spawnBossForMinute(minuteOrWave: Int) {
         bossActive = true
-        val bossIndex = (state.currentWave / GameConfig.BOSS_WAVE_INTERVAL) - 1
+        val bossIndex = (GameConfig.BOSS_TIMES_MINUTES.indexOf(minuteOrWave)
+            .takeIf { it >= 0 } ?: ((minuteOrWave / GameConfig.BOSS_WAVE_INTERVAL) - 1).coerceAtLeast(0))
         val bossHp = chapter.bossHp * (1f + bossIndex * 0.5f)
         state.spawnEnemy(
             x = GameConfig.WORLD_WIDTH / 2f,
@@ -229,9 +212,6 @@ class WaveSystem(
         totalSpawned++
     }
 
-    /**
-     * Check if the boss is dead.
-     */
     private fun isBossDead(): Boolean {
         for (i in state.enemies.indices) {
             if (i >= state.tags.size) break
@@ -243,11 +223,9 @@ class WaveSystem(
         return true
     }
 
-    /**
-     * Pick a weighted random enemy type.
-     */
     private fun pickWeighted(pool: Map<EnemyComponent.EnemyData, Int>): EnemyComponent.EnemyData {
         val total = pool.values.sum()
+        if (total <= 0) return EnemyComponent.EnemyData.ZOMBIE
         var roll = Random.nextInt(total)
         for ((type, weight) in pool) {
             roll -= weight
