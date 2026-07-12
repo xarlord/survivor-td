@@ -746,9 +746,9 @@ private fun DrawScope.drawGameBackground(
         brush = Brush.verticalGradient(
             colorStops = arrayOf(
                 0f to palette.skyTop,
-                0.42f to palette.skyMid,
-                0.55f to palette.horizon,
-                0.62f to palette.ground,
+                0.28f to palette.skyMid,
+                0.48f to palette.horizon,
+                0.58f to palette.ground,
                 1f to palette.groundDeep
             )
         )
@@ -763,7 +763,7 @@ private fun DrawScope.drawGameBackground(
         val tileW = size.width
         val tileH = size.height
         val scrollX = ((camX * 0.08f) % tileW + tileW) % tileW
-        // Horizontal-only parallax so ground doesn't scroll away
+        // Soft multiply-ish blend — keep sky gradient visible
         for (ox in -1..1) {
             drawImage(
                 image = img,
@@ -772,7 +772,7 @@ private fun DrawScope.drawGameBackground(
                     0
                 ),
                 dstSize = androidx.compose.ui.unit.IntSize(tileW.toInt(), tileH.toInt()),
-                alpha = 0.72f
+                alpha = 0.38f
             )
         }
     }

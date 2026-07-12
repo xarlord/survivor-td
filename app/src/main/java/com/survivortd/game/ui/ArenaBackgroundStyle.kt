@@ -24,13 +24,13 @@ object ArenaBackgroundStyle {
     )
 
     fun chapterPalette(minute: Float): Palette = when {
-        minute < 3f -> Palette( // wasteland dusk
-            skyTop = Color(0xFF2A1410),
-            skyMid = Color(0xFF8B3A22),
-            horizon = Color(0xFFE07A3A),
-            ground = Color(0xFF5A3420),
-            groundDeep = Color(0xFF2E1A10),
-            silhouette = Color(0xFF1A0E08),
+        minute < 3f -> Palette( // wasteland dusk — high drama
+            skyTop = Color(0xFF0D0818),
+            skyMid = Color(0xFF4A1830),
+            horizon = Color(0xFFFF8A3D),
+            ground = Color(0xFF3D2418),
+            groundDeep = Color(0xFF140C08),
+            silhouette = Color(0xFF080408),
             haze = Color(0xFFFFB070),
             grid = Color(0xFFFFC090)
         )
