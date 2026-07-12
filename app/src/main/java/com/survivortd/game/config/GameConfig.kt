@@ -20,7 +20,8 @@ object GameConfig {
 
     // === PLAYER ===
     const val PLAYER_BASE_HP = 100f
-    const val PLAYER_BASE_SPEED = 440f  // px/s (2x — fast responsive feel)
+    // GDD §3.1 / §3.2 — do NOT inflate without amending GAME_SPEC.md
+    const val PLAYER_BASE_SPEED = 220f  // px/s
     const val PLAYER_BASE_PICKUP_RANGE = 60f
     const val PLAYER_BASE_DAMAGE_MULT = 1.0f
     const val PLAYER_BASE_ATTACK_SPEED_MULT = 1.0f
@@ -29,8 +30,8 @@ object GameConfig {
     const val PLAYER_BASE_REGEN = 0.5f  // HP/s
     const val PLAYER_BASE_DODGE = 0f
     const val PLAYER_HITBOX_RADIUS = 20f
-    const val PLAYER_DASH_SPEED = 800f   // 2x base for dash
-    const val PLAYER_DASH_DURATION = 0.12f  // seconds
+    const val PLAYER_DASH_SPEED = 400f   // GDD §3.1 dash speed
+    const val PLAYER_DASH_DURATION = 0.12f  // seconds (120ms)
     const val PLAYER_DASH_COOLDOWN = 3f     // seconds
 
     // === XP & LEVELING ===

@@ -89,13 +89,11 @@ class ChapterAndWaveTest {
         }
 
         @Test
-        @DisplayName("Wave enemy count scales per wave")
+        @DisplayName("Wave enemy count scales per wave (compat counter)")
         fun waveEnemyCountScales() {
-            // Wave 1: base count
             waveSys.startNextWave()
             val wave1Remaining = state.waveEnemiesRemaining
 
-            // Advance to wave 3 by starting next waves
             state.currentWave = 1
             waveSys.startNextWave()
             val wave2Remaining = state.waveEnemiesRemaining
@@ -111,12 +109,10 @@ class ChapterAndWaveTest {
         }
 
         @Test
-        @DisplayName("Boss spawns on boss wave")
+        @DisplayName("Boss spawns on boss wave (compat) and at GDD minute 5")
         fun bossSpawns() {
-            // Force to wave 5 (boss wave interval)
             state.currentWave = 4
             waveSys.startNextWave()
-
             assertTrue(state.isBossWave, "Wave 5 should be a boss wave")
             val hasBoss = state.enemies.any { it.type == chapter.bossType }
             assertTrue(hasBoss, "Boss should spawn on boss wave")
@@ -125,16 +121,24 @@ class ChapterAndWaveTest {
         @Test
         @DisplayName("Normal spawning pauses during boss")
         fun pausesDuringBoss() {
-            // Force to boss wave
             state.currentWave = 4
             waveSys.startNextWave()
             assertTrue(state.isBossWave)
 
             val spawnedBeforePause = waveSys.totalSpawned
-            // Simulate 5 seconds with boss alive
             repeat(300) { waveSys.update(0.016f) }
             assertEquals(spawnedBeforePause, waveSys.totalSpawned,
                 "No new enemies should spawn during boss fight")
+        }
+
+        @Test
+        @DisplayName("GDD: boss at elapsed minute 5")
+        fun bossAtMinuteFive() {
+            waveSys.update(0.016f)
+            state.elapsedSeconds = 300f
+            waveSys.update(0.016f)
+            assertTrue(state.isBossWave)
+            assertTrue(state.enemies.any { it.type == chapter.bossType })
         }
     }
 

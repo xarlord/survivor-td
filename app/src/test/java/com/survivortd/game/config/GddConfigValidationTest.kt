@@ -25,8 +25,8 @@ class GddConfigValidationTest {
         fun playerHp() = assertEquals(100f, GameConfig.PLAYER_BASE_HP)
 
         @Test
-        @DisplayName("Player base speed = 440 px/s")
-        fun playerSpeed() = assertEquals(440f, GameConfig.PLAYER_BASE_SPEED)
+        @DisplayName("Player base speed = 220 px/s (GDD §3.2)")
+        fun playerSpeed() = assertEquals(220f, GameConfig.PLAYER_BASE_SPEED)
 
         @Test
         @DisplayName("Player pickup range = 60 px")
@@ -57,8 +57,8 @@ class GddConfigValidationTest {
         fun playerHitbox() = assertEquals(20f, GameConfig.PLAYER_HITBOX_RADIUS)
 
         @Test
-        @DisplayName("Player dash speed = 800 px/s")
-        fun playerDashSpeed() = assertEquals(800f, GameConfig.PLAYER_DASH_SPEED)
+        @DisplayName("Player dash speed = 400 px/s (GDD §3.1)")
+        fun playerDashSpeed() = assertEquals(400f, GameConfig.PLAYER_DASH_SPEED)
 
         @Test
         @DisplayName("Player dash cooldown = 3s")
