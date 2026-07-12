@@ -726,8 +726,8 @@ private fun GameCanvasView(
 }
 
 /**
- * Draws the game background: chapter bitmap (parallax scroll) + fallback grid.
- * GDD § art — themed chapter arenas; bitmaps under assets/backgrounds/.
+ * Draws the game background: atmospheric sky/ground + chapter bitmap + soft grid.
+ * Screen-space only so camera never "loses" the art under solid brown (#160).
  */
 private fun DrawScope.drawGameBackground(
     state: GameState,
@@ -739,69 +739,122 @@ private fun DrawScope.drawGameBackground(
     camY: Float
 ) {
     val minute = state.elapsedSeconds / 60f
-    val baseColor = ArenaBackgroundStyle.chapterBaseColorArgb(minute)
-    val gridColor = ArenaBackgroundStyle.chapterGridColorArgb(minute)
+    val palette = ArenaBackgroundStyle.chapterPalette(minute)
 
-    // Solid themed fallback under bitmap
-    drawRect(color = Color(baseColor))
+    // Always paint a multi-stop sky → horizon → ground gradient (premium base)
+    drawRect(
+        brush = Brush.verticalGradient(
+            colorStops = arrayOf(
+                0f to palette.skyTop,
+                0.42f to palette.skyMid,
+                0.55f to palette.horizon,
+                0.62f to palette.ground,
+                1f to palette.groundDeep
+            )
+        )
+    )
+
+    // Horizon silhouette band (ruins / trees / skyline) — always visible
+    drawHorizonSilhouettes(palette, camX)
 
     val chapter = state.backgroundManager?.chapterForMinutes(minute)
     val img = chapter?.bitmap
     if (img != null) {
-        // Full-bleed chapter art with mild parallax
         val tileW = size.width
         val tileH = size.height
-        val scrollX = (camX * 0.12f) % tileW
-        val scrollY = (camY * 0.12f) % tileH
+        val scrollX = ((camX * 0.08f) % tileW + tileW) % tileW
+        // Horizontal-only parallax so ground doesn't scroll away
         for (ox in -1..1) {
-            for (oy in -1..1) {
-                drawImage(
-                    image = img,
-                    dstOffset = androidx.compose.ui.unit.IntOffset(
-                        (-scrollX + ox * tileW).toInt(),
-                        (-scrollY + oy * tileH).toInt()
-                    ),
-                    dstSize = androidx.compose.ui.unit.IntSize(tileW.toInt(), tileH.toInt()),
-                    alpha = ArenaBackgroundStyle.CHAPTER_BITMAP_ALPHA
-                )
-            }
+            drawImage(
+                image = img,
+                dstOffset = androidx.compose.ui.unit.IntOffset(
+                    (-scrollX + ox * tileW).toInt(),
+                    0
+                ),
+                dstSize = androidx.compose.ui.unit.IntSize(tileW.toInt(), tileH.toInt()),
+                alpha = 0.72f
+            )
         }
     }
 
-    // Soft orientation grid — must not dominate art (#157)
-    val g = Color(gridColor).copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_SECONDARY)
-    val g2 = Color(gridColor).copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_PRIMARY)
-    drawParallaxGrid(camX * 0.4f, camY * 0.4f, 140f, g)
-    drawParallaxGrid(camX, camY, 96f, g2)
+    // Soft floor grid only on lower 55% so sky stays clean
+    val g = palette.grid.copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_SECONDARY)
+    val g2 = palette.grid.copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_PRIMARY)
+    drawParallaxGrid(camX * 0.35f, camY * 0.2f, 160f, g, floorOnly = true)
+    drawParallaxGrid(camX, camY * 0.35f, 110f, g2, floorOnly = true)
 
-    // Gentle vignette so HUD/center stay readable over bright tiles
     val vig = ArenaBackgroundStyle.VIGNETTE_ALPHA
     drawRect(
-        brush = androidx.compose.ui.graphics.Brush.radialGradient(
+        brush = Brush.radialGradient(
             colors = listOf(
                 Color.Transparent,
-                Color.Black.copy(alpha = vig * 0.55f)
+                Color.Black.copy(alpha = vig * 0.6f)
             ),
-            center = Offset(size.width * 0.5f, size.height * 0.45f),
-            radius = size.maxDimension * 0.72f
+            center = Offset(size.width * 0.5f, size.height * 0.42f),
+            radius = size.maxDimension * 0.78f
         )
     )
+}
+
+private fun DrawScope.drawHorizonSilhouettes(
+    palette: ArenaBackgroundStyle.Palette,
+    camX: Float
+) {
+    val horizonY = size.height * 0.55f
+    val groundH = size.height - horizonY
+    // Soft haze line
+    drawRect(
+        color = palette.haze.copy(alpha = 0.22f),
+        topLeft = Offset(0f, horizonY - 18f),
+        size = Size(size.width, 36f)
+    )
+    val seed = ((camX * 0.05f).toInt() + 17)
+    var x = -40f - (camX * 0.15f % 90f)
+    var i = 0
+    while (x < size.width + 80f) {
+        val h = 40f + ((seed + i * 37) % 90)
+        val w = 28f + ((seed + i * 13) % 40)
+        drawRect(
+            color = palette.silhouette.copy(alpha = 0.85f),
+            topLeft = Offset(x, horizonY - h),
+            size = Size(w, h + groundH * 0.08f)
+        )
+        // jagged peak
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(x, horizonY - h)
+            lineTo(x + w * 0.35f, horizonY - h - 18f - (i % 5) * 4f)
+            lineTo(x + w, horizonY - h)
+            close()
+        }
+        drawPath(path, color = palette.silhouette.copy(alpha = 0.85f))
+        x += w + 10f + (i % 3) * 8f
+        i++
+    }
 }
 
 /**
  * Draws a parallax grid layer offset by camera position.
  */
-private fun DrawScope.drawParallaxGrid(offsetX: Float, offsetY: Float, gridSize: Float, color: Color) {
+private fun DrawScope.drawParallaxGrid(
+    offsetX: Float,
+    offsetY: Float,
+    gridSize: Float,
+    color: Color,
+    floorOnly: Boolean = false
+) {
+    val minY = if (floorOnly) size.height * 0.55f else 0f
     val startX = -offsetX % gridSize - gridSize
     val startY = -offsetY % gridSize - gridSize
     var x = startX
     while (x < size.width + gridSize) {
-        drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+        drawLine(color, Offset(x, minY), Offset(x, size.height), strokeWidth = 1f)
         x += gridSize
     }
-    var y = startY
+    var y = maxOf(startY, minY)
     while (y < size.height + gridSize) {
-        drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+        if (y >= minY) {
+            drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+        }
         y += gridSize
     }
 }

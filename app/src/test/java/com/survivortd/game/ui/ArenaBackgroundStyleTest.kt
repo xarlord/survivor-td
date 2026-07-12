@@ -7,20 +7,21 @@ import org.junit.jupiter.api.Test
 
 class ArenaBackgroundStyleTest {
     @Test
-    @DisplayName("grid alpha is soft enough not to dominate chapter art")
-    fun softGrid() {
-        assertTrue(ArenaBackgroundStyle.GRID_ALPHA_PRIMARY <= 0.12f)
+    @DisplayName("grid alpha stays subtle so art can dominate")
+    fun gridSubtle() {
+        assertTrue(ArenaBackgroundStyle.GRID_ALPHA_PRIMARY < 0.12f)
         assertTrue(ArenaBackgroundStyle.GRID_ALPHA_SECONDARY < ArenaBackgroundStyle.GRID_ALPHA_PRIMARY)
-        assertEquals(1.0f, ArenaBackgroundStyle.CHAPTER_BITMAP_ALPHA, 0.001f)
+        assertTrue(ArenaBackgroundStyle.CHAPTER_BITMAP_ALPHA in 0.5f..1.0f)
     }
 
     @Test
-    @DisplayName("chapter base colors differ across minutes (themed arenas)")
-    fun themedBases() {
-        val c0 = ArenaBackgroundStyle.chapterBaseColorArgb(0f)
-        val c1 = ArenaBackgroundStyle.chapterBaseColorArgb(4f)
-        val c2 = ArenaBackgroundStyle.chapterBaseColorArgb(10f)
-        val c3 = ArenaBackgroundStyle.chapterBaseColorArgb(14f)
-        assertTrue(setOf(c0, c1, c2, c3).size >= 3)
+    @DisplayName("each chapter has distinct palette")
+    fun chapterPalettesDistinct() {
+        val a = ArenaBackgroundStyle.chapterPalette(0f)
+        val b = ArenaBackgroundStyle.chapterPalette(4f)
+        val c = ArenaBackgroundStyle.chapterPalette(10f)
+        assertTrue(a.skyMid != b.skyMid)
+        assertTrue(b.ground != c.ground)
+        assertTrue(a.horizon != c.horizon)
     }
 }
