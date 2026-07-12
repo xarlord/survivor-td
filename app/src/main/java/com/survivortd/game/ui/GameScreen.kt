@@ -201,6 +201,8 @@ fun GameScreen(
     val heroPassiveSystem = remember { com.survivortd.game.systems.HeroPassiveSystem() }
     // [#118] SpriteAnimationSystem — advances sprite frames at 60Hz.
     val spriteAnimationSystem = remember { com.survivortd.game.systems.SpriteAnimationSystem(gameState) }
+    // Floating damage numbers (spawned by combat/projectiles; was never updated/drawn)
+    val damageNumberSystem = remember { com.survivortd.game.systems.DamageNumberSystem(gameState) }
 
     // Resolve HeroId from string parameter
     val hero = remember(heroId) {
@@ -286,6 +288,7 @@ fun GameScreen(
                 pickupSystem.update(effectiveDt)
                 // [#118] Sprite animation — advance frames after all movement/combat settled
                 spriteAnimationSystem.update(effectiveDt)
+                damageNumberSystem.update(effectiveDt)
                 // Particles always update (even during hit-stop for visual continuity)
                 particleSystem.update(dt)
                 gameState.elapsedSeconds += effectiveDt
@@ -703,6 +706,7 @@ private fun GameCanvasView(
         drawEntities(gameState, culler, toScreenX, toScreenY, toScreenR)
         drawParticles(particleSystem, culler, toScreenX, toScreenY, toScreenR)
         drawTowers(towerSystem, culler, toScreenX, toScreenY, toScreenR)
+        drawDamageNumbers(gameState, culler, toScreenX, toScreenY)
         drawPlayerGlow(gameState, toScreenX, toScreenY, toScreenR)
 
         // Damage flash overlay (screen-space, not world-space)
@@ -984,6 +988,56 @@ private fun DrawScope.drawStatusEffectGlow(
             radius = radius + 7f * radius / 20f, // proportional glow in screen-space
             center = center
         )
+    }
+}
+
+/**
+ * Draws floating combat damage numbers (rise + fade). Crits are larger/gold.
+ */
+private fun DrawScope.drawDamageNumbers(
+    state: GameState,
+    culler: FrustumCuller,
+    toScreenX: (Float) -> Float,
+    toScreenY: (Float) -> Float
+) {
+    val nums = state.damageNumbers
+    if (nums.isEmpty()) return
+    drawIntoCanvas { canvas ->
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textAlign = android.graphics.Paint.Align.CENTER
+            isFakeBoldText = true
+            setShadowLayer(4f, 0f, 1f, android.graphics.Color.BLACK)
+        }
+        for (i in nums.indices) {
+            val dn = nums[i]
+            if (!culler.isVisible(dn.x, dn.y)) continue
+            val alpha = (dn.alpha * 255).toInt().coerceIn(0, 255)
+            if (alpha <= 0) continue
+            val color = if (dn.isCrit) {
+                android.graphics.Color.argb(alpha, 255, 215, 0)
+            } else {
+                val c = dn.elementColor
+                android.graphics.Color.argb(
+                    alpha,
+                    (c shr 16) and 0xFF,
+                    (c shr 8) and 0xFF,
+                    c and 0xFF
+                )
+            }
+            paint.color = color
+            paint.textSize = dn.fontSize * density
+            val text = if (dn.isCrit) {
+                dn.value.toInt().toString() + "!"
+            } else {
+                dn.value.toInt().toString()
+            }
+            canvas.nativeCanvas.drawText(
+                text,
+                toScreenX(dn.x),
+                toScreenY(dn.y),
+                paint
+            )
+        }
     }
 }
 
