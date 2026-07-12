@@ -112,6 +112,8 @@ fun GameScreen(
     var isBuildPhaseUi by remember { mutableStateOf(false) }
     var buildPhaseSeconds by remember { mutableFloatStateOf(0f) }
     var selectedTower by remember { mutableStateOf<com.survivortd.game.config.TowerType?>(null) }
+    var hudWeapons by remember { mutableIntStateOf(0) }
+    var hudTowers by remember { mutableIntStateOf(0) }
 
     // [#94] Pause state
     var isPaused by remember { mutableStateOf(false) }
@@ -366,6 +368,9 @@ fun GameScreen(
             secondsRemaining = hudTime,
             score = hudScore,
             gold = hudGold,
+            scrap = hudScrap,
+            weaponCount = hudWeapons,
+            towerCount = hudTowers,
             fps = hudFps,
             wave = hudWave,
             waveText = hudWaveText,
@@ -538,6 +543,8 @@ fun GameScreen(
             if (!waveSystem.isBuildPhase) {
                 selectedTower = null
             }
+            hudWeapons = weaponSystem.weapons.size
+            hudTowers = towerSystem.towers.size
 
             // Check for level-up → generate choices (game continues, no pause)
             if (gameState.pendingLevelUps > 0 && levelUpChoices.isEmpty()) {
@@ -1113,6 +1120,9 @@ private fun GameHUD(
     secondsRemaining: Long,
     score: Long,
     gold: Int,
+    scrap: Int = 0,
+    weaponCount: Int = 0,
+    towerCount: Int = 0,
     fps: Int = 0,
     wave: Int = 0,
     waveText: String = "",
@@ -1185,6 +1195,22 @@ private fun GameHUD(
 
             Spacer(modifier = Modifier.width(8.dp))
 
+            // Scrap (TD currency)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.testTag("hud_scrap")
+            ) {
+                Text("SCRAP", color = Color(0xFFB0BEC5), fontSize = 9.sp)
+                Text(
+                    text = "$scrap",
+                    color = Color(0xFFECEFF1),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
             // Timer — (#115) use StringBuilder to avoid format() allocation
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("TIME", color = Color(0xFF9E9E9E), fontSize = 9.sp)
@@ -1212,18 +1238,23 @@ private fun GameHUD(
             trackColor = Color(0xFF333A4D)
         )
 
-        // [#97] Wave + Time info row
-        if (wave > 0) {
+        // [#97] Wave + loadout info row
+        if (wave > 0 || weaponCount > 0 || towerCount > 0) {
             Spacer(modifier = Modifier.height(2.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center
             ) {
+                val parts = mutableListOf<String>()
+                if (wave > 0) parts.add("Wave $wave")
+                if (weaponCount > 0) parts.add("Wpn $weaponCount")
+                if (towerCount > 0) parts.add("Towers $towerCount")
                 Text(
-                    text = "Wave $wave",
+                    text = HudLoadoutFormat.format(wave, weaponCount, towerCount),
                     color = Color(0xFF9E9E9E),
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.testTag("hud_loadout")
                 )
             }
         }
