@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -1197,133 +1198,150 @@ private fun GameHUD(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(com.survivortd.game.ui.theme.StdColors.SurfaceGlass)
+                .border(1.dp, com.survivortd.game.ui.theme.StdColors.Border, RoundedCornerShape(16.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Level badge
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF00E676)),
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                com.survivortd.game.ui.theme.StdColors.CyanBright,
+                                com.survivortd.game.ui.theme.StdColors.Cyan
+                            )
+                        )
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "$level",
-                    color = Color(0xFF0A0E1A),
+                    color = com.survivortd.game.ui.theme.StdColors.TextInverse,
                     fontWeight = FontWeight.Black,
-                    fontSize = 18.sp
+                    fontSize = 16.sp
                 )
             }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // FPS counter (debug)
-            Text(
-                text = "${fps}fps",
-                color = Color(0xFF9E9E9E),
-                fontSize = 10.sp
-            )
 
             Spacer(modifier = Modifier.width(8.dp))
 
             // HP bar
             Column(modifier = Modifier.weight(1f)) {
-                Text("HP", color = Color(0xFFFF1744), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "HP",
+                        color = com.survivortd.game.ui.theme.StdColors.Coral,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp
+                    )
+                    if (fps > 0) {
+                        Text(
+                            "${fps}fps",
+                            color = com.survivortd.game.ui.theme.StdColors.TextMuted,
+                            fontSize = 9.sp
+                        )
+                    }
+                }
+                Spacer(Modifier.height(3.dp))
                 LinearProgressIndicator(
                     progress = { hp },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(8.dp)
+                        .height(7.dp)
                         .clip(RoundedCornerShape(4.dp)),
-                    color = Color(0xFFFF1744),
-                    trackColor = Color(0xFF333A4D)
+                    color = com.survivortd.game.ui.theme.StdColors.Hp,
+                    trackColor = com.survivortd.game.ui.theme.StdColors.HpTrack
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
-            // Gold
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("GOLD", color = Color(0xFFFFD700), fontSize = 9.sp)
-                Text(
-                    text = "$gold",
-                    color = Color(0xFFFFD700),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Scrap (TD currency)
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+            HudStatChip(
+                label = "GOLD",
+                value = "$gold",
+                color = com.survivortd.game.ui.theme.StdColors.Amber
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            HudStatChip(
+                label = "SCRAP",
+                value = "$scrap",
+                color = com.survivortd.game.ui.theme.StdColors.Scrap,
                 modifier = Modifier.testTag("hud_scrap")
-            ) {
-                Text("SCRAP", color = Color(0xFFB0BEC5), fontSize = 9.sp)
-                Text(
-                    text = "$scrap",
-                    color = Color(0xFFECEFF1),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            )
+            Spacer(modifier = Modifier.width(6.dp))
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Timer — (#115) use StringBuilder to avoid format() allocation
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("TIME", color = Color(0xFF9E9E9E), fontSize = 9.sp)
-                val mins = secondsRemaining / 60
-                val secs = secondsRemaining % 60
-                Text(
-                    text = "$mins:${secs.toString().padStart(2, '0')}",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            val mins = secondsRemaining / 60
+            val secs = secondsRemaining % 60
+            HudStatChip(
+                label = "TIME",
+                value = "$mins:${secs.toString().padStart(2, '0')}",
+                color = com.survivortd.game.ui.theme.StdColors.TextPrimary
+            )
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         // XP bar
         LinearProgressIndicator(
             progress = { xp },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(6.dp)
+                .height(5.dp)
                 .clip(RoundedCornerShape(3.dp)),
-            color = Color(0xFF2979FF),
-            trackColor = Color(0xFF333A4D)
+            color = com.survivortd.game.ui.theme.StdColors.Xp,
+            trackColor = com.survivortd.game.ui.theme.StdColors.XpTrack
         )
 
-        // [#97] Wave + loadout info row
         if (wave > 0 || weaponCount > 0 || towerCount > 0) {
-            Spacer(modifier = Modifier.height(2.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                val parts = mutableListOf<String>()
-                if (wave > 0) parts.add("Wave $wave")
-                if (weaponCount > 0) parts.add("Wpn $weaponCount")
-                if (towerCount > 0) parts.add("Towers $towerCount")
-                Text(
-                    text = HudLoadoutFormat.format(wave, weaponCount, towerCount),
-                    color = Color(0xFF9E9E9E),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.testTag("hud_loadout")
-                )
-            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = HudLoadoutFormat.format(wave, weaponCount, towerCount),
+                color = com.survivortd.game.ui.theme.StdColors.TextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.6.sp,
+                modifier = Modifier.testTag("hud_loadout")
+            )
         }
+    }
+}
+
+@Composable
+private fun HudStatChip(
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        Text(
+            label,
+            color = color.copy(alpha = 0.75f),
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.6.sp
+        )
+        Text(
+            text = value,
+            color = color,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 

@@ -4,14 +4,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -19,19 +17,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.config.TowerType
+import com.survivortd.game.ui.theme.StdColors
 
 /**
- * Build Phase UI (GDD §7 / §12.3) — issue #147.
- *
- * Shown while WaveSystem.isBuildPhase is true after a boss death.
- * Player picks a tower type, then taps the map to place it with scrap.
+ * Build Phase UI (GDD §7 / §12.3) — premium chrome (#160).
  */
 @Composable
 fun BuildPhaseOverlay(
@@ -46,37 +41,43 @@ fun BuildPhaseOverlay(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xF00A0E1A), RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
-            .border(1.dp, Color(0xFFFFD700).copy(alpha = 0.55f), RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
-            .padding(horizontal = 10.dp, vertical = 12.dp)
+            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+            .background(StdColors.SurfaceGlass)
+            .border(
+                1.dp,
+                StdColors.BorderStrong,
+                RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 14.dp)
             .testTag("build_phase_overlay"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = "BUILD PHASE  ·  ${remainingSeconds.toInt().coerceAtLeast(0)}s",
-            color = Color(0xFFFFE082),
+            color = StdColors.AmberSoft,
             fontWeight = FontWeight.Black,
-            fontSize = 17.sp,
+            fontSize = 15.sp,
+            letterSpacing = 1.sp,
             modifier = Modifier.testTag("build_phase_timer")
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Scrap: $scrap  ·  Towers: $towersPlaced/$maxTowers",
-            color = Color(0xFFECEFF1),
-            fontSize = 14.sp,
+            text = "Scrap $scrap  ·  Towers $towersPlaced/$maxTowers",
+            color = StdColors.TextSecondary,
+            fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.testTag("build_phase_scrap")
         )
         if (selected != null) {
             Text(
                 text = "Tap map to place ${selected.displayName}",
-                color = Color(0xFF69F0AE),
-                fontSize = 13.sp,
+                color = StdColors.CyanBright,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 2.dp)
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
@@ -85,44 +86,44 @@ fun BuildPhaseOverlay(
                 val canAfford = scrap >= type.baseCost
                 val isSelected = selected == type
                 val borderColor = when {
-                    isSelected -> Color(0xFFFFD700)
-                    canAfford -> Color(0xFF69F0AE)
-                    else -> Color(0xFF546E7A)
+                    isSelected -> StdColors.Amber
+                    canAfford -> StdColors.Cyan
+                    else -> StdColors.Border
                 }
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .width(54.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .border(2.dp, borderColor, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.5.dp, borderColor, RoundedCornerShape(12.dp))
                         .background(
-                            if (isSelected) Color(0xFF1B5E20) else Color(0xFF263238)
+                            if (isSelected) StdColors.SurfaceHigh else StdColors.Surface
                         )
                         .clickable(enabled = canAfford) {
                             onSelect(if (isSelected) null else type)
                         }
-                        .padding(vertical = 6.dp, horizontal = 4.dp)
+                        .padding(vertical = 8.dp, horizontal = 4.dp)
                         .testTag("tower_btn_${type.name}")
                 ) {
                     Text(
                         text = towerEmoji(type),
-                        fontSize = 20.sp,
+                        fontSize = 18.sp,
                         textAlign = TextAlign.Center
                     )
                     Text(
                         text = type.baseCost.toString(),
-                        color = if (canAfford) Color.White else Color(0xFF90A4AE),
+                        color = if (canAfford) StdColors.TextPrimary else StdColors.TextMuted,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
         }
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "Select a tower, then tap the battlefield",
-            color = Color(0xFFCFD8DC),
-            fontSize = 12.sp
+            color = StdColors.TextMuted,
+            fontSize = 11.sp
         )
     }
 }
@@ -136,10 +137,6 @@ private fun towerEmoji(type: TowerType): String = when (type) {
     TowerType.ROCKET_POD -> "🚀"
 }
 
-/**
- * Pure helper: convert screen (canvas) coords → world coords given camera center.
- * Used by placement + unit tests.
- */
 object BuildPlacement {
     fun screenToWorld(
         screenX: Float,
