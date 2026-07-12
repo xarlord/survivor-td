@@ -763,7 +763,9 @@ private fun DrawScope.drawEntities(
         if (spriteMgr != null && i < sprites.size) {
             val sprite = sprites[i]
             if (sprite.hasSprite) {
-                val frame = spriteMgr.getFrame(sprite.atlasId, sprite.animState, sprite.frameIndex)
+                val frame = spriteMgr.getFrame(
+                    sprite.atlasId, sprite.variantId, sprite.animState, sprite.frameIndex
+                )
                 if (frame != null) {
                     val sheet = spriteMgr.getSheet(sprite.atlasId)
                     if (sheet != null && sheet.bitmap != null) {

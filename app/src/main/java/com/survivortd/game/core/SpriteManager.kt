@@ -3,7 +3,6 @@ package com.survivortd.game.core
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Rect
-import android.os.Build
 import android.view.View
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -11,34 +10,25 @@ import org.json.JSONObject
 import java.io.IOException
 
 /**
- * Loads WebP/PNG texture atlases from assets/ and parses JSON frame metadata.
+ * Loads texture atlases from assets/ and parses JSON frame metadata.
  *
- * Design decisions (AGY review #118):
- * - HARDWARE bitmaps only when hardware-accelerated canvas is available
- * - Integer-indexed frame arrays instead of string keys (avoids GC in hot loop)
- * - Pre-allocated Rect objects per frame (no allocation during rendering)
- * - All loading on IO dispatcher via suspend fun loadAll()
+ * Issue #146: animations are keyed by (variantId, animState), not animState alone.
+ * Previously only the first idle/walk in an atlas was kept — all enemies shared zombie frames.
+ *
+ * animKey = variantId * VARIANT_STRIDE + animState
  */
 class SpriteManager(private val context: Context) {
 
-    // [#118] AGY review: detect edit/preview mode to avoid HARDWARE bitmap crashes
     private val isSoftwareContext: Boolean = run {
         try { View(context).isInEditMode } catch (_: Exception) { false }
     }
 
-    /**
-     * A single frame region on a texture atlas.
-     * Pre-allocated Rect avoids allocation in the draw loop.
-     */
     class SpriteFrame(
         val srcRect: Rect,
         val width: Int,
         val height: Int
     )
 
-    /**
-     * An animation sequence — array of frames played in order.
-     */
     class SpriteAnim(
         val frames: Array<SpriteFrame>,
         val frameDuration: Float
@@ -46,23 +36,18 @@ class SpriteManager(private val context: Context) {
         val frameCount: Int get() = frames.size
     }
 
-    /**
-     * A loaded texture atlas with its animations indexed by animStateId.
-     */
     class SpriteSheet(
         val bitmap: ImageBitmap?,
         val animations: Map<Int, SpriteAnim>
     ) {
-        fun getAnim(animStateId: Int): SpriteAnim? = animations[animStateId]
+        fun getAnim(animKey: Int): SpriteAnim? = animations[animKey]
 
-        fun getFrame(animStateId: Int, frameIndex: Int): SpriteFrame? {
-            val anim = animations[animStateId] ?: return null
+        fun getFrame(animKey: Int, frameIndex: Int): SpriteFrame? {
+            val anim = animations[animKey] ?: return null
             return anim.frames.getOrNull(frameIndex)
         }
     }
 
-    // Atlas IDs — used by SpriteComponent.atlasId
-    // -1 means "no sprite, use fallback shapes"
     companion object {
         private const val TAG = "SpriteManager"
 
@@ -72,29 +57,72 @@ class SpriteManager(private val context: Context) {
         const val ATLAS_EFFECTS = 2
         const val ATLAS_COUNT = 3
 
-        // Animation state IDs — used by SpriteComponent.animState
         const val ANIM_IDLE = 0
         const val ANIM_WALK = 1
         const val ANIM_ATTACK = 2
         const val ANIM_DEATH = 3
 
-        // Frame durations (seconds per frame)
+        /** Room for 10 anim states per variant (idle/walk/attack/death + extras). */
+        const val VARIANT_STRIDE = 10
+
         const val DEFAULT_FRAME_DURATION = 0.15f
         const val SLOW_FRAME_DURATION = 0.25f
         const val FAST_FRAME_DURATION = 0.1f
+
+        // Enemy variants (must match atlas frame prefixes)
+        const val VARIANT_ZOMBIE = 0
+        const val VARIANT_RUNNER = 1
+        const val VARIANT_BRUTE = 2
+        const val VARIANT_SPITTER = 3
+        const val VARIANT_BOMBER = 4
+        const val VARIANT_HEALER = 5
+        const val VARIANT_SHIELDER = 6
+        const val VARIANT_FLYER = 7
+        const val VARIANT_ELITE = 8
+        const val VARIANT_BOSS = 9
+
+        // Hero variants
+        const val VARIANT_HERO_DEFAULT = 0
+        const val VARIANT_HERO_KNIGHT = 0
+        const val VARIANT_HERO_COMMANDER = 1
+        const val VARIANT_HERO_BERSERKER = 2
+        const val VARIANT_HERO_ENGINEER = 3
+        const val VARIANT_HERO_MEDIC = 4
+        const val VARIANT_HERO_SCOUT = 5
+        const val VARIANT_HERO_SHIELDER = 6
+
+        // Effects variants
+        const val VARIANT_PROJ_BULLET = 0
+        const val VARIANT_PROJ_LASER = 1
+        const val VARIANT_PROJ_ROCKET = 2
+        const val VARIANT_PICKUP_XP_SMALL = 3
+        const val VARIANT_PICKUP_XP_MEDIUM = 4
+        const val VARIANT_PICKUP_XP_LARGE = 5
+        const val VARIANT_PICKUP_HEALTH = 6
+
+        fun animKey(variantId: Int, animState: Int): Int =
+            variantId * VARIANT_STRIDE + animState
+
+        fun enemyVariant(typeName: String): Int = when (typeName.lowercase()) {
+            "zombie" -> VARIANT_ZOMBIE
+            "runner" -> VARIANT_RUNNER
+            "brute" -> VARIANT_BRUTE
+            "spitter" -> VARIANT_SPITTER
+            "bomber" -> VARIANT_BOMBER
+            "healer" -> VARIANT_HEALER
+            "shielder" -> VARIANT_SHIELDER
+            "flyer" -> VARIANT_FLYER
+            "elite" -> VARIANT_ELITE
+            "boss" -> VARIANT_BOSS
+            else -> VARIANT_ZOMBIE
+        }
     }
 
-    /** Loaded atlases indexed by atlas ID. */
     private val atlases = arrayOfNulls<SpriteSheet>(ATLAS_COUNT)
 
-    /** Whether all atlases have been successfully loaded. */
     var isLoaded: Boolean = false
         private set
 
-    /**
-     * Load all texture atlases from assets/spritesheets/.
-     * Must be called from Dispatchers.IO.
-     */
     fun loadAll() {
         try {
             loadAtlas(ATLAS_HEROES, "spritesheets/heroes.png", "spritesheets/heroes.json")
@@ -102,7 +130,6 @@ class SpriteManager(private val context: Context) {
             loadAtlas(ATLAS_EFFECTS, "spritesheets/effects.png", "spritesheets/effects.json")
             isLoaded = true
         } catch (e: IOException) {
-            // [#118] Graceful degradation — game still works with shapes
             android.util.Log.w(TAG, "Failed to load sprite atlases, using fallback shapes", e)
         }
     }
@@ -116,14 +143,11 @@ class SpriteManager(private val context: Context) {
     private fun loadBitmap(path: String): ImageBitmap? {
         return try {
             val options = BitmapFactory.Options().apply {
-                // Force ARGB_8888 — HARDWARE bitmaps cannot be converted
-                // to ImageBitmap via .asImageBitmap() and return null silently.
                 inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
                 inMutable = false
             }
             context.assets.open(path).use { stream ->
-                BitmapFactory.decodeStream(stream, null, options)
-                    ?.asImageBitmap()
+                BitmapFactory.decodeStream(stream, null, options)?.asImageBitmap()
             }
         } catch (e: IOException) {
             android.util.Log.w(TAG, "Failed to load bitmap: $path", e)
@@ -131,10 +155,6 @@ class SpriteManager(private val context: Context) {
         }
     }
 
-    /**
-     * Parse TexturePacker Hash JSON format into animation state → frame array map.
-     * Groups frames by animation name (e.g., "hero_knight_idle" → [frame0, frame1, ...]).
-     */
     private fun parseFrameJson(path: String): Map<Int, SpriteAnim> {
         val jsonStr = try {
             context.assets.open(path).bufferedReader().use { it.readText() }
@@ -145,9 +165,8 @@ class SpriteManager(private val context: Context) {
 
         val root = JSONObject(jsonStr)
         val framesObj = root.getJSONObject("frames")
+        val animFrames = mutableMapOf<String, MutableList<Pair<Int, SpriteFrame>>>()
 
-        // Group frames by animation base name
-        val animFrames = mutableMapOf<String, MutableList<SpriteFrame>>()
         val keys = framesObj.keys()
         while (keys.hasNext()) {
             val key = keys.next()
@@ -156,78 +175,157 @@ class SpriteManager(private val context: Context) {
             val y = frameData.getInt("y")
             val w = frameData.getInt("w")
             val h = frameData.getInt("h")
-            val srcRect = Rect(x, y, x + w, y + h)
-            val frame = SpriteFrame(srcRect, w, h)
+            val frame = SpriteFrame(Rect(x, y, x + w, y + h), w, h)
 
-            // Extract animation base name: "hero_knight_idle_0" → "hero_knight_idle"
+            // "zombie_idle_0" → base "zombie_idle", index 0
             val lastUnderscore = key.lastIndexOf('_')
-            if (lastUnderscore > 0) {
-                val baseName = key.substring(0, lastUnderscore)
-                animFrames.getOrPut(baseName) { mutableListOf() }.add(frame)
-            }
+            if (lastUnderscore <= 0) continue
+            val indexPart = key.substring(lastUnderscore + 1).toIntOrNull() ?: 0
+            val baseName = key.substring(0, lastUnderscore)
+            animFrames.getOrPut(baseName) { mutableListOf() }.add(indexPart to frame)
         }
 
-        // Convert to animStateId → SpriteAnim map
-        // Use the registered animation name mappings
         return buildAnimMap(animFrames)
     }
 
     /**
-     * Map animation group names to integer state IDs.
-     * Names like "hero_knight_idle" → ANIM_IDLE, "hero_knight_walk" → ANIM_WALK, etc.
-     * Also handles "enemy_zombie_idle" → ANIM_IDLE patterns.
+     * Map every animation group to a unique (variant, state) key.
+     * Also aliases missing WALK → IDLE for that variant so movement doesn't go blank.
      */
-    private fun buildAnimMap(animFrames: Map<String, List<SpriteFrame>>): Map<Int, SpriteAnim> {
+    private fun buildAnimMap(
+        animFrames: Map<String, List<Pair<Int, SpriteFrame>>>
+    ): Map<Int, SpriteAnim> {
         val result = mutableMapOf<Int, SpriteAnim>()
+        val idleKeysByVariant = mutableMapOf<Int, Int>()
 
-        for ((name, frames) in animFrames) {
-            val animStateId = when {
-                name.endsWith("_idle") || name.endsWith("_Idle") -> ANIM_IDLE
-                name.endsWith("_walk") || name.endsWith("_Walk") -> ANIM_WALK
-                name.endsWith("_attack") || name.endsWith("_Attack") -> ANIM_ATTACK
-                name.endsWith("_death") || name.endsWith("_Death") -> ANIM_DEATH
-                // Single-frame effects get IDLE
-                !name.contains('_') || name.startsWith("proj_") || name.startsWith("pickup_") -> ANIM_IDLE
-                else -> ANIM_IDLE
+        for ((name, indexedFrames) in animFrames) {
+            val sorted = indexedFrames.sortedBy { it.first }.map { it.second }
+            if (sorted.isEmpty()) continue
+
+            val (variantId, animState) = parseNameToVariantAndState(name)
+            val key = animKey(variantId, animState)
+
+            val duration = when {
+                name.contains("brute") || name.contains("boss") -> SLOW_FRAME_DURATION
+                name.contains("runner") -> FAST_FRAME_DURATION
+                name.startsWith("proj_") || name.startsWith("pickup_") -> 0f
+                else -> DEFAULT_FRAME_DURATION
             }
+            result[key] = SpriteAnim(sorted.toTypedArray(), duration)
+            if (animState == ANIM_IDLE) {
+                idleKeysByVariant[variantId] = key
+            }
+        }
 
-            // Only keep the first animation per state ID for this atlas
-            // (If multiple entities share an atlas, we'd need per-entity anim mappings)
-            if (!result.containsKey(animStateId)) {
-                val duration = when {
-                    name.contains("brute") -> SLOW_FRAME_DURATION
-                    name.contains("runner") -> FAST_FRAME_DURATION
-                    name.contains("boss") -> SLOW_FRAME_DURATION
-                    name.startsWith("proj_") || name.startsWith("pickup_") -> 0f // Static
-                    else -> DEFAULT_FRAME_DURATION
-                }
-                result[animStateId] = SpriteAnim(frames.toTypedArray(), duration)
+        // Alias walk→idle when walk frames missing for a variant
+        for ((variant, idleKey) in idleKeysByVariant) {
+            val walkKey = animKey(variant, ANIM_WALK)
+            if (!result.containsKey(walkKey)) {
+                result[walkKey] = result[idleKey]!!
             }
         }
 
         return result
     }
 
+    /**
+     * Examples:
+     *  - zombie_idle → (0, IDLE)
+     *  - hero_knight_walk → (0, WALK)
+     *  - proj_bullet → (0, IDLE)
+     *  - pickup_xp_small → (3, IDLE)
+     */
+    private fun parseNameToVariantAndState(name: String): Pair<Int, Int> {
+        val state = when {
+            name.endsWith("_idle", true) -> ANIM_IDLE
+            name.endsWith("_walk", true) -> ANIM_WALK
+            name.endsWith("_attack", true) -> ANIM_ATTACK
+            name.endsWith("_death", true) -> ANIM_DEATH
+            else -> ANIM_IDLE
+        }
+
+        val base = name
+            .removeSuffix("_idle").removeSuffix("_Idle")
+            .removeSuffix("_walk").removeSuffix("_Walk")
+            .removeSuffix("_attack").removeSuffix("_Attack")
+            .removeSuffix("_death").removeSuffix("_Death")
+            .lowercase()
+
+        val variant = when {
+            base == "zombie" || base == "enemy_zombie" -> VARIANT_ZOMBIE
+            base == "runner" || base == "enemy_runner" -> VARIANT_RUNNER
+            base == "brute" || base == "enemy_brute" -> VARIANT_BRUTE
+            base == "spitter" || base == "enemy_spitter" -> VARIANT_SPITTER
+            base == "bomber" || base == "enemy_bomber" -> VARIANT_BOMBER
+            base == "healer" || base == "enemy_healer" -> VARIANT_HEALER
+            base == "shielder" || base == "enemy_shielder" -> VARIANT_SHIELDER
+            base == "flyer" || base == "enemy_flyer" -> VARIANT_FLYER
+            base == "elite" || base == "enemy_elite" -> VARIANT_ELITE
+            base == "boss" || base == "enemy_boss" -> VARIANT_BOSS
+            base == "hero_knight" || base == "knight" -> VARIANT_HERO_KNIGHT
+            base == "hero_commander" || base == "commander" -> VARIANT_HERO_COMMANDER
+            base == "hero_berserker" || base == "berserker" -> VARIANT_HERO_BERSERKER
+            base == "hero_engineer" || base == "engineer" -> VARIANT_HERO_ENGINEER
+            base == "hero_medic" || base == "medic" -> VARIANT_HERO_MEDIC
+            base == "hero_scout" || base == "scout" -> VARIANT_HERO_SCOUT
+            base == "hero_shielder" -> VARIANT_HERO_SHIELDER
+            base == "proj_bullet" -> VARIANT_PROJ_BULLET
+            base == "proj_laser" -> VARIANT_PROJ_LASER
+            base == "proj_rocket" -> VARIANT_PROJ_ROCKET
+            base == "pickup_xp_small" -> VARIANT_PICKUP_XP_SMALL
+            base == "pickup_xp_medium" -> VARIANT_PICKUP_XP_MEDIUM
+            base == "pickup_xp_large" -> VARIANT_PICKUP_XP_LARGE
+            base == "pickup_health" -> VARIANT_PICKUP_HEALTH
+            else -> VARIANT_HERO_DEFAULT
+        }
+        return variant to state
+    }
+
     fun getSheet(atlasId: Int): SpriteSheet? = atlases.getOrNull(atlasId)
 
-    fun getFrame(atlasId: Int, animStateId: Int, frameIndex: Int): SpriteFrame? {
+    fun getFrame(atlasId: Int, variantId: Int, animStateId: Int, frameIndex: Int): SpriteFrame? {
         val sheet = atlases.getOrNull(atlasId) ?: return null
-        return sheet.getFrame(animStateId, frameIndex)
+        val key = animKey(variantId, animStateId)
+        sheet.getFrame(key, frameIndex)?.let { return it }
+        // Fallback: default variant same state, then idle
+        if (variantId != 0) {
+            sheet.getFrame(animKey(0, animStateId), frameIndex)?.let { return it }
+        }
+        return sheet.getFrame(animKey(variantId, ANIM_IDLE), frameIndex)
+            ?: sheet.getFrame(animKey(0, ANIM_IDLE), frameIndex)
     }
 
-    fun getAnim(atlasId: Int, animStateId: Int): SpriteAnim? {
+    /** Backward-compat: treats variant as 0. Prefer variant-aware overload. */
+    fun getFrame(atlasId: Int, animStateId: Int, frameIndex: Int): SpriteFrame? =
+        getFrame(atlasId, 0, animStateId, frameIndex)
+
+    fun getAnim(atlasId: Int, variantId: Int, animStateId: Int): SpriteAnim? {
         val sheet = atlases.getOrNull(atlasId) ?: return null
-        return sheet.getAnim(animStateId)
+        sheet.getAnim(animKey(variantId, animStateId))?.let { return it }
+        if (variantId != 0) {
+            sheet.getAnim(animKey(0, animStateId))?.let { return it }
+        }
+        return sheet.getAnim(animKey(variantId, ANIM_IDLE))
+            ?: sheet.getAnim(animKey(0, ANIM_IDLE))
     }
 
-    /**
-     * Register a specific animation for a given atlas + state.
-     * Used to override auto-detected animations with explicit per-entity mappings.
-     */
+    fun getAnim(atlasId: Int, animStateId: Int): SpriteAnim? =
+        getAnim(atlasId, 0, animStateId)
+
     fun registerAnim(atlasId: Int, animStateId: Int, anim: SpriteAnim) {
+        registerAnim(atlasId, 0, animStateId, anim)
+    }
+
+    fun registerAnim(atlasId: Int, variantId: Int, animStateId: Int, anim: SpriteAnim) {
         val sheet = atlases[atlasId] ?: return
         @Suppress("UNCHECKED_CAST")
         val mutableAnims = sheet.animations as MutableMap<Int, SpriteAnim>
-        mutableAnims[animStateId] = anim
+        mutableAnims[animKey(variantId, animStateId)] = anim
+    }
+
+    /** Test helper: inject a sheet without assets. */
+    internal fun setAtlasForTest(atlasId: Int, sheet: SpriteSheet) {
+        atlases[atlasId] = sheet
+        isLoaded = true
     }
 }

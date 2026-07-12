@@ -62,7 +62,9 @@ class SpriteAnimationSystem(private val gameState: GameState) {
                         sprite.frameIndex = 0
                         sprite.animTimer = 0f
                         // Update frame count from sprite manager if available
-                        val anim = gameState.spriteManager?.getAnim(sprite.atlasId, desiredAnim)
+                        val anim = gameState.spriteManager?.getAnim(
+                            sprite.atlasId, sprite.variantId, desiredAnim
+                        )
                         if (anim != null && anim.frameCount > 0) {
                             sprite.frameCount = anim.frameCount
                             sprite.frameDuration = anim.frameDuration

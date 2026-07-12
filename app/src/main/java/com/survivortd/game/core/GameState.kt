@@ -181,6 +181,7 @@ class GameState {
         tags.add(TagComponent(TagComponent.EntityTag.PLAYER))
         sprites.add(com.survivortd.game.components.SpriteComponent(
             atlasId = SpriteManager.ATLAS_HEROES,
+            variantId = SpriteManager.VARIANT_HERO_DEFAULT,
             animState = SpriteManager.ANIM_IDLE,
             frameDuration = SpriteManager.DEFAULT_FRAME_DURATION,
             frameCount = 4
@@ -262,9 +263,21 @@ class GameState {
         towers.add(TowerComponent())  // Placeholder
         statusEffects.add(StatusEffectsComponent())
         tags.add(TagComponent(TagComponent.EntityTag.ENEMY))
-        // [#118] Sprite animation data per enemy type
+        // [#146] Per-enemy-type sprite variant so atlases no longer share zombie frames
         sprites.add(com.survivortd.game.components.SpriteComponent(
             atlasId = SpriteManager.ATLAS_ENEMIES,
+            variantId = when (enemyType) {
+                EnemyComponent.EnemyData.ZOMBIE -> SpriteManager.VARIANT_ZOMBIE
+                EnemyComponent.EnemyData.RUNNER -> SpriteManager.VARIANT_RUNNER
+                EnemyComponent.EnemyData.BRUTE -> SpriteManager.VARIANT_BRUTE
+                EnemyComponent.EnemyData.SPITTER -> SpriteManager.VARIANT_SPITTER
+                EnemyComponent.EnemyData.BOMBER -> SpriteManager.VARIANT_BOMBER
+                EnemyComponent.EnemyData.HEALER -> SpriteManager.VARIANT_HEALER
+                EnemyComponent.EnemyData.SHIELDER -> SpriteManager.VARIANT_SHIELDER
+                EnemyComponent.EnemyData.FLYER -> SpriteManager.VARIANT_FLYER
+                EnemyComponent.EnemyData.ELITE -> SpriteManager.VARIANT_ELITE
+                EnemyComponent.EnemyData.BOSS -> SpriteManager.VARIANT_BOSS
+            },
             animState = SpriteManager.ANIM_IDLE,
             frameDuration = when (enemyType) {
                 EnemyComponent.EnemyData.BRUTE -> SpriteManager.SLOW_FRAME_DURATION

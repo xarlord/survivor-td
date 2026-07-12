@@ -160,8 +160,60 @@ class SpriteManagerTest {
         val id = state.spawnEnemy(0f, 0f, com.survivortd.game.components.EnemyComponent.EnemyData.ZOMBIE)
         val sprite = state.sprites[id]
         assertEquals(SpriteManager.ATLAS_ENEMIES, sprite.atlasId)
+        assertEquals(SpriteManager.VARIANT_ZOMBIE, sprite.variantId)
         assertEquals(SpriteManager.ANIM_IDLE, sprite.animState)
         assertEquals(4, sprite.frameCount)
+    }
+
+    @Test
+    @DisplayName("different enemy types get distinct variantIds (#146)")
+    fun differentEnemiesGetDistinctVariants() {
+        val state = GameState()
+        val z = state.spawnEnemy(0f, 0f, com.survivortd.game.components.EnemyComponent.EnemyData.ZOMBIE)
+        val r = state.spawnEnemy(0f, 0f, com.survivortd.game.components.EnemyComponent.EnemyData.RUNNER)
+        val b = state.spawnEnemy(0f, 0f, com.survivortd.game.components.EnemyComponent.EnemyData.BRUTE)
+        assertEquals(SpriteManager.VARIANT_ZOMBIE, state.sprites[z].variantId)
+        assertEquals(SpriteManager.VARIANT_RUNNER, state.sprites[r].variantId)
+        assertEquals(SpriteManager.VARIANT_BRUTE, state.sprites[b].variantId)
+        assertNotEquals(state.sprites[z].variantId, state.sprites[r].variantId)
+    }
+
+    @Test
+    @DisplayName("animKey packs variant and state without collision")
+    fun animKeyNoCollision() {
+        val zombieIdle = SpriteManager.animKey(SpriteManager.VARIANT_ZOMBIE, SpriteManager.ANIM_IDLE)
+        val runnerIdle = SpriteManager.animKey(SpriteManager.VARIANT_RUNNER, SpriteManager.ANIM_IDLE)
+        val zombieWalk = SpriteManager.animKey(SpriteManager.VARIANT_ZOMBIE, SpriteManager.ANIM_WALK)
+        assertNotEquals(zombieIdle, runnerIdle)
+        assertNotEquals(zombieIdle, zombieWalk)
+        assertEquals(
+            SpriteManager.VARIANT_RUNNER * SpriteManager.VARIANT_STRIDE + SpriteManager.ANIM_IDLE,
+            runnerIdle
+        )
+    }
+
+    @Test
+    @DisplayName("getFrame with variant returns that variant's frames, not another type")
+    fun variantAwareFrameLookup() {
+        val zombieFrame = SpriteManager.SpriteFrame(android.graphics.Rect(0, 0, 64, 64), 64, 64)
+        val runnerFrame = SpriteManager.SpriteFrame(android.graphics.Rect(0, 128, 64, 192), 64, 64)
+        val animations = mapOf(
+            SpriteManager.animKey(SpriteManager.VARIANT_ZOMBIE, SpriteManager.ANIM_IDLE) to
+                SpriteManager.SpriteAnim(arrayOf(zombieFrame), 0.15f),
+            SpriteManager.animKey(SpriteManager.VARIANT_RUNNER, SpriteManager.ANIM_IDLE) to
+                SpriteManager.SpriteAnim(arrayOf(runnerFrame), 0.1f),
+        )
+        val sheet = SpriteManager.SpriteSheet(null, animations)
+        val z = sheet.getFrame(
+            SpriteManager.animKey(SpriteManager.VARIANT_ZOMBIE, SpriteManager.ANIM_IDLE), 0
+        )
+        val r = sheet.getFrame(
+            SpriteManager.animKey(SpriteManager.VARIANT_RUNNER, SpriteManager.ANIM_IDLE), 0
+        )
+        assertNotNull(z)
+        assertNotNull(r)
+        assertSame(zombieFrame.srcRect, z!!.srcRect)
+        assertSame(runnerFrame.srcRect, r!!.srcRect)
     }
 
     @Test
