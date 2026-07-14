@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -725,8 +726,8 @@ private fun GameCanvasView(
 }
 
 /**
- * Draws the game background: chapter bitmap (parallax scroll) + fallback grid.
- * GDD § art — themed chapter arenas; bitmaps under assets/backgrounds/.
+ * Draws the game background: atmospheric sky/ground + chapter bitmap + soft grid.
+ * Screen-space only so camera never "loses" the art under solid brown (#160).
  */
 private fun DrawScope.drawGameBackground(
     state: GameState,
@@ -738,69 +739,122 @@ private fun DrawScope.drawGameBackground(
     camY: Float
 ) {
     val minute = state.elapsedSeconds / 60f
-    val baseColor = ArenaBackgroundStyle.chapterBaseColorArgb(minute)
-    val gridColor = ArenaBackgroundStyle.chapterGridColorArgb(minute)
+    val palette = ArenaBackgroundStyle.chapterPalette(minute)
 
-    // Solid themed fallback under bitmap
-    drawRect(color = Color(baseColor))
+    // Always paint a multi-stop sky → horizon → ground gradient (premium base)
+    drawRect(
+        brush = Brush.verticalGradient(
+            colorStops = arrayOf(
+                0f to palette.skyTop,
+                0.28f to palette.skyMid,
+                0.48f to palette.horizon,
+                0.58f to palette.ground,
+                1f to palette.groundDeep
+            )
+        )
+    )
+
+    // Horizon silhouette band (ruins / trees / skyline) — always visible
+    drawHorizonSilhouettes(palette, camX)
 
     val chapter = state.backgroundManager?.chapterForMinutes(minute)
     val img = chapter?.bitmap
     if (img != null) {
-        // Full-bleed chapter art with mild parallax
         val tileW = size.width
         val tileH = size.height
-        val scrollX = (camX * 0.12f) % tileW
-        val scrollY = (camY * 0.12f) % tileH
+        val scrollX = ((camX * 0.08f) % tileW + tileW) % tileW
+        // Soft multiply-ish blend — keep sky gradient visible
         for (ox in -1..1) {
-            for (oy in -1..1) {
-                drawImage(
-                    image = img,
-                    dstOffset = androidx.compose.ui.unit.IntOffset(
-                        (-scrollX + ox * tileW).toInt(),
-                        (-scrollY + oy * tileH).toInt()
-                    ),
-                    dstSize = androidx.compose.ui.unit.IntSize(tileW.toInt(), tileH.toInt()),
-                    alpha = ArenaBackgroundStyle.CHAPTER_BITMAP_ALPHA
-                )
-            }
+            drawImage(
+                image = img,
+                dstOffset = androidx.compose.ui.unit.IntOffset(
+                    (-scrollX + ox * tileW).toInt(),
+                    0
+                ),
+                dstSize = androidx.compose.ui.unit.IntSize(tileW.toInt(), tileH.toInt()),
+                alpha = 0.38f
+            )
         }
     }
 
-    // Soft orientation grid — must not dominate art (#157)
-    val g = Color(gridColor).copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_SECONDARY)
-    val g2 = Color(gridColor).copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_PRIMARY)
-    drawParallaxGrid(camX * 0.4f, camY * 0.4f, 140f, g)
-    drawParallaxGrid(camX, camY, 96f, g2)
+    // Soft floor grid only on lower 55% so sky stays clean
+    val g = palette.grid.copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_SECONDARY)
+    val g2 = palette.grid.copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_PRIMARY)
+    drawParallaxGrid(camX * 0.35f, camY * 0.2f, 160f, g, floorOnly = true)
+    drawParallaxGrid(camX, camY * 0.35f, 110f, g2, floorOnly = true)
 
-    // Gentle vignette so HUD/center stay readable over bright tiles
     val vig = ArenaBackgroundStyle.VIGNETTE_ALPHA
     drawRect(
-        brush = androidx.compose.ui.graphics.Brush.radialGradient(
+        brush = Brush.radialGradient(
             colors = listOf(
                 Color.Transparent,
-                Color.Black.copy(alpha = vig * 0.55f)
+                Color.Black.copy(alpha = vig * 0.6f)
             ),
-            center = Offset(size.width * 0.5f, size.height * 0.45f),
-            radius = size.maxDimension * 0.72f
+            center = Offset(size.width * 0.5f, size.height * 0.42f),
+            radius = size.maxDimension * 0.78f
         )
     )
+}
+
+private fun DrawScope.drawHorizonSilhouettes(
+    palette: ArenaBackgroundStyle.Palette,
+    camX: Float
+) {
+    val horizonY = size.height * 0.55f
+    val groundH = size.height - horizonY
+    // Soft haze line
+    drawRect(
+        color = palette.haze.copy(alpha = 0.22f),
+        topLeft = Offset(0f, horizonY - 18f),
+        size = Size(size.width, 36f)
+    )
+    val seed = ((camX * 0.05f).toInt() + 17)
+    var x = -40f - (camX * 0.15f % 90f)
+    var i = 0
+    while (x < size.width + 80f) {
+        val h = 40f + ((seed + i * 37) % 90)
+        val w = 28f + ((seed + i * 13) % 40)
+        drawRect(
+            color = palette.silhouette.copy(alpha = 0.85f),
+            topLeft = Offset(x, horizonY - h),
+            size = Size(w, h + groundH * 0.08f)
+        )
+        // jagged peak
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(x, horizonY - h)
+            lineTo(x + w * 0.35f, horizonY - h - 18f - (i % 5) * 4f)
+            lineTo(x + w, horizonY - h)
+            close()
+        }
+        drawPath(path, color = palette.silhouette.copy(alpha = 0.85f))
+        x += w + 10f + (i % 3) * 8f
+        i++
+    }
 }
 
 /**
  * Draws a parallax grid layer offset by camera position.
  */
-private fun DrawScope.drawParallaxGrid(offsetX: Float, offsetY: Float, gridSize: Float, color: Color) {
+private fun DrawScope.drawParallaxGrid(
+    offsetX: Float,
+    offsetY: Float,
+    gridSize: Float,
+    color: Color,
+    floorOnly: Boolean = false
+) {
+    val minY = if (floorOnly) size.height * 0.55f else 0f
     val startX = -offsetX % gridSize - gridSize
     val startY = -offsetY % gridSize - gridSize
     var x = startX
     while (x < size.width + gridSize) {
-        drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+        drawLine(color, Offset(x, minY), Offset(x, size.height), strokeWidth = 1f)
         x += gridSize
     }
-    var y = startY
+    var y = maxOf(startY, minY)
     while (y < size.height + gridSize) {
-        drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+        if (y >= minY) {
+            drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+        }
         y += gridSize
     }
 }
@@ -1197,133 +1251,150 @@ private fun GameHUD(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(com.survivortd.game.ui.theme.StdColors.SurfaceGlass)
+                .border(1.dp, com.survivortd.game.ui.theme.StdColors.Border, RoundedCornerShape(16.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Level badge
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF00E676)),
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                com.survivortd.game.ui.theme.StdColors.CyanBright,
+                                com.survivortd.game.ui.theme.StdColors.Cyan
+                            )
+                        )
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "$level",
-                    color = Color(0xFF0A0E1A),
+                    color = com.survivortd.game.ui.theme.StdColors.TextInverse,
                     fontWeight = FontWeight.Black,
-                    fontSize = 18.sp
+                    fontSize = 16.sp
                 )
             }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // FPS counter (debug)
-            Text(
-                text = "${fps}fps",
-                color = Color(0xFF9E9E9E),
-                fontSize = 10.sp
-            )
 
             Spacer(modifier = Modifier.width(8.dp))
 
             // HP bar
             Column(modifier = Modifier.weight(1f)) {
-                Text("HP", color = Color(0xFFFF1744), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "HP",
+                        color = com.survivortd.game.ui.theme.StdColors.Coral,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp
+                    )
+                    if (fps > 0) {
+                        Text(
+                            "${fps}fps",
+                            color = com.survivortd.game.ui.theme.StdColors.TextMuted,
+                            fontSize = 9.sp
+                        )
+                    }
+                }
+                Spacer(Modifier.height(3.dp))
                 LinearProgressIndicator(
                     progress = { hp },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(8.dp)
+                        .height(7.dp)
                         .clip(RoundedCornerShape(4.dp)),
-                    color = Color(0xFFFF1744),
-                    trackColor = Color(0xFF333A4D)
+                    color = com.survivortd.game.ui.theme.StdColors.Hp,
+                    trackColor = com.survivortd.game.ui.theme.StdColors.HpTrack
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
-            // Gold
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("GOLD", color = Color(0xFFFFD700), fontSize = 9.sp)
-                Text(
-                    text = "$gold",
-                    color = Color(0xFFFFD700),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Scrap (TD currency)
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+            HudStatChip(
+                label = "GOLD",
+                value = "$gold",
+                color = com.survivortd.game.ui.theme.StdColors.Amber
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            HudStatChip(
+                label = "SCRAP",
+                value = "$scrap",
+                color = com.survivortd.game.ui.theme.StdColors.Scrap,
                 modifier = Modifier.testTag("hud_scrap")
-            ) {
-                Text("SCRAP", color = Color(0xFFB0BEC5), fontSize = 9.sp)
-                Text(
-                    text = "$scrap",
-                    color = Color(0xFFECEFF1),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            )
+            Spacer(modifier = Modifier.width(6.dp))
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Timer — (#115) use StringBuilder to avoid format() allocation
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("TIME", color = Color(0xFF9E9E9E), fontSize = 9.sp)
-                val mins = secondsRemaining / 60
-                val secs = secondsRemaining % 60
-                Text(
-                    text = "$mins:${secs.toString().padStart(2, '0')}",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            val mins = secondsRemaining / 60
+            val secs = secondsRemaining % 60
+            HudStatChip(
+                label = "TIME",
+                value = "$mins:${secs.toString().padStart(2, '0')}",
+                color = com.survivortd.game.ui.theme.StdColors.TextPrimary
+            )
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         // XP bar
         LinearProgressIndicator(
             progress = { xp },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(6.dp)
+                .height(5.dp)
                 .clip(RoundedCornerShape(3.dp)),
-            color = Color(0xFF2979FF),
-            trackColor = Color(0xFF333A4D)
+            color = com.survivortd.game.ui.theme.StdColors.Xp,
+            trackColor = com.survivortd.game.ui.theme.StdColors.XpTrack
         )
 
-        // [#97] Wave + loadout info row
         if (wave > 0 || weaponCount > 0 || towerCount > 0) {
-            Spacer(modifier = Modifier.height(2.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                val parts = mutableListOf<String>()
-                if (wave > 0) parts.add("Wave $wave")
-                if (weaponCount > 0) parts.add("Wpn $weaponCount")
-                if (towerCount > 0) parts.add("Towers $towerCount")
-                Text(
-                    text = HudLoadoutFormat.format(wave, weaponCount, towerCount),
-                    color = Color(0xFF9E9E9E),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.testTag("hud_loadout")
-                )
-            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = HudLoadoutFormat.format(wave, weaponCount, towerCount),
+                color = com.survivortd.game.ui.theme.StdColors.TextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.6.sp,
+                modifier = Modifier.testTag("hud_loadout")
+            )
         }
+    }
+}
+
+@Composable
+private fun HudStatChip(
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        Text(
+            label,
+            color = color.copy(alpha = 0.75f),
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.6.sp
+        )
+        Text(
+            text = value,
+            color = color,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
