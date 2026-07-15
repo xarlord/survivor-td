@@ -184,6 +184,9 @@ data class PlayerComponent(
     var dashCooldown: Float = 3f,
     var dashCooldownTimer: Float = 0f,
     var isDashing: Boolean = false,
+    /** Unit vector captured at dash start; a dash cannot be steered mid-flight. */
+    var dashDirectionX: Float = 0f,
+    var dashDirectionY: Float = 0f,
     var hasRevived: Boolean = false,
     var magnetTimer: Float = 0f,
 

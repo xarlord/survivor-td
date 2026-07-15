@@ -125,6 +125,7 @@ class MovementSystemTest {
         val joy = VirtualJoystick(state)
         val mov = MovementSystem(state, joy)
         joy.onTouchDown(0f, 0f, nowMs = 1000L)
+        joy.onTouchMove(100f, 0f)
         joy.onTouchUp()
         joy.onTouchDown(0f, 0f, nowMs = 1100L)
         assertTrue(joy.isDashRequested())
@@ -135,5 +136,28 @@ class MovementSystemTest {
         // dash 400 * 0.1 = 40
         assertTrue(delta > 30f, "dash should move farther than walk: delta=$delta")
         assertFalse(joy.isDashRequested(), "dash consumed")
+    }
+
+    @Test
+    @DisplayName("Dash keeps the last joystick direction while the second tap is stationary (#164)")
+    fun dashUsesLockedLastJoystickDirection() {
+        val joy = VirtualJoystick(state)
+        val mov = MovementSystem(state, joy)
+        joy.onTouchDown(0f, 0f, nowMs = 1_000L)
+        joy.onTouchMove(0f, -100f)
+        joy.onTouchUp()
+        joy.onTouchDown(0f, 0f, nowMs = 1_100L)
+
+        val startX = state.positions[state.playerIndex].x
+        val startY = state.positions[state.playerIndex].y
+        mov.update(0.04f)
+        assertEquals(startX, state.positions[state.playerIndex].x, 1f, "Dash must not default east")
+        assertTrue(state.positions[state.playerIndex].y < startY, "Dash should use the last up direction")
+
+        // Subsequent stick movement must not steer a dash already in progress.
+        joy.onTouchMove(100f, 0f)
+        val xBeforeSecondTick = state.positions[state.playerIndex].x
+        mov.update(0.04f)
+        assertEquals(xBeforeSecondTick, state.positions[state.playerIndex].x, 1f, "Dash direction is locked")
     }
 }
