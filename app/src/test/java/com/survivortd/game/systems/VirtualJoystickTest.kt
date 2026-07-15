@@ -1,5 +1,6 @@
 package com.survivortd.game.systems
 
+import com.survivortd.game.config.GameConfig
 import com.survivortd.game.core.GameState
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
@@ -116,6 +117,26 @@ class VirtualJoystickTest {
         assertEquals(0f, request.directionX, 0.01f)
         assertEquals(-1f, request.directionY, 0.01f)
         assertNull(joystick.consumeDashRequest(), "dash is one-shot")
+    }
+
+    @Test
+    @DisplayName("Double-tap timing uses the GDD-configured 300 ms boundary (#166)")
+    fun doubleTapUsesConfiguredTimingWindow() {
+        val t0 = 2_000_000L
+        joystick.onTouchDown(0f, 0f, nowMs = t0)
+        joystick.onTouchMove(100f, 0f)
+        joystick.onTouchUp()
+
+        joystick.onTouchDown(0f, 0f, nowMs = t0 + GameConfig.DASH_DOUBLE_TAP_MS)
+        assertNotNull(joystick.consumeDashRequest(), "A tap at the configured boundary must dash")
+        joystick.onTouchUp()
+
+        val t1 = t0 + 1_000L
+        joystick.onTouchDown(0f, 0f, nowMs = t1)
+        joystick.onTouchMove(100f, 0f)
+        joystick.onTouchUp()
+        joystick.onTouchDown(0f, 0f, nowMs = t1 + GameConfig.DASH_DOUBLE_TAP_MS + 1L)
+        assertNull(joystick.consumeDashRequest(), "A tap after the configured window must not dash")
     }
 
     @Test
