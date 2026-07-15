@@ -1,5 +1,6 @@
 package com.survivortd.game.systems
 
+import com.survivortd.game.config.GameConfig
 import com.survivortd.game.core.GameState
 import kotlin.math.sqrt
 
@@ -14,7 +15,7 @@ import kotlin.math.sqrt
  * [maxRadius] is in **the same pixel space as Compose pointer positions**.
  * Prefer [setMaxRadius] from the canvas size (density-aware).
  *
- * Dash: double-tap within [DASH_DOUBLE_TAP_MS] on touch-down captures the
+ * Dash: double-tap within [GameConfig.DASH_DOUBLE_TAP_MS] on touch-down captures the
  * last non-zero stick direction. MovementSystem consumes that request once.
  */
 class VirtualJoystick(
@@ -46,7 +47,10 @@ class VirtualJoystick(
         // Double-tap dash detection (touch-down only — never per physics tick).
         // The new touch starts at the stick center, so it must use the last
         // meaningful direction rather than state.joystickX/Y after reset.
-        if (lastTapTimeMs > 0L && nowMs - lastTapTimeMs < DASH_DOUBLE_TAP_MS && hasLastDirection()) {
+        if (lastTapTimeMs > 0L &&
+            nowMs - lastTapTimeMs <= GameConfig.DASH_DOUBLE_TAP_MS &&
+            hasLastDirection()
+        ) {
             dashRequest = DashRequest(lastDirectionX, lastDirectionY)
             lastTapTimeMs = 0L
         } else {
@@ -125,7 +129,6 @@ class VirtualJoystick(
     data class DashRequest(val directionX: Float, val directionY: Float)
 
     companion object {
-        const val DASH_DOUBLE_TAP_MS = 280L
         private const val DIRECTION_EPSILON_SQUARED = 0.0001f
         /** Fraction of min(canvas W,H) used as stick radius. */
         const val RADIUS_SCREEN_FRACTION = 0.16f
