@@ -14,8 +14,8 @@ import kotlin.math.sqrt
  * [maxRadius] is in **the same pixel space as Compose pointer positions**.
  * Prefer [setMaxRadius] from the canvas size (density-aware).
  *
- * Dash: double-tap within [DASH_DOUBLE_TAP_MS] on touch-down sets
- * [dashRequested]; MovementSystem consumes it once.
+ * Dash: double-tap within [DASH_DOUBLE_TAP_MS] on touch-down captures the
+ * last non-zero stick direction. MovementSystem consumes that request once.
  */
 class VirtualJoystick(
     private val state: GameState,
@@ -30,8 +30,11 @@ class VirtualJoystick(
     private var activePointerId: Long = -1L
 
     private var lastTapTimeMs: Long = 0L
-    /** One-shot flag for dash; cleared by [consumeDashRequest]. */
-    private var dashRequested: Boolean = false
+    // Kept after touch-up because the second tap begins at the stick's center.
+    private var lastDirectionX: Float = 0f
+    private var lastDirectionY: Float = 0f
+    /** One-shot request with a locked, unit-length direction. */
+    private var dashRequest: DashRequest? = null
 
     fun setMaxRadius(px: Float) {
         if (px > 32f) maxRadius = px
@@ -40,9 +43,11 @@ class VirtualJoystick(
     fun maxRadius(): Float = maxRadius
 
     fun onTouchDown(x: Float, y: Float, pointerId: Long = 0L, nowMs: Long = System.currentTimeMillis()) {
-        // Double-tap dash detection (touch-down only — never per physics tick)
-        if (lastTapTimeMs > 0L && nowMs - lastTapTimeMs < DASH_DOUBLE_TAP_MS) {
-            dashRequested = true
+        // Double-tap dash detection (touch-down only — never per physics tick).
+        // The new touch starts at the stick center, so it must use the last
+        // meaningful direction rather than state.joystickX/Y after reset.
+        if (lastTapTimeMs > 0L && nowMs - lastTapTimeMs < DASH_DOUBLE_TAP_MS && hasLastDirection()) {
+            dashRequest = DashRequest(lastDirectionX, lastDirectionY)
             lastTapTimeMs = 0L
         } else {
             lastTapTimeMs = nowMs
@@ -71,11 +76,15 @@ class VirtualJoystick(
             return
         }
 
-        // Analog magnitude: 0 at deadzone edge → 1 at maxRadius
+        // Analog magnitude: 0 at deadzone edge → 1 at maxRadius.
         val usable = (dist - deadPx) / (maxRadius - deadPx).coerceAtLeast(1f)
         val mag = usable.coerceIn(0f, 1f)
-        state.joystickX = (dx / dist) * mag
-        state.joystickY = (dy / dist) * mag
+        val directionX = dx / dist
+        val directionY = dy / dist
+        state.joystickX = directionX * mag
+        state.joystickY = directionY * mag
+        lastDirectionX = directionX
+        lastDirectionY = directionY
     }
 
     fun onTouchUp(pointerId: Long = activePointerId) {
@@ -92,14 +101,14 @@ class VirtualJoystick(
 
     fun activePointerId(): Long = activePointerId
 
-    fun consumeDashRequest(): Boolean {
-        if (!dashRequested) return false
-        dashRequested = false
-        return true
+    fun consumeDashRequest(): DashRequest? {
+        val request = dashRequest
+        dashRequest = null
+        return request
     }
 
     /** Test helper / debug */
-    fun isDashRequested(): Boolean = dashRequested
+    fun isDashRequested(): Boolean = dashRequest != null
 
     fun anchor(): Pair<Float, Float> = Pair(anchorX, anchorY)
 
@@ -110,8 +119,14 @@ class VirtualJoystick(
         return Pair(anchorX + dx, anchorY + dy)
     }
 
+    private fun hasLastDirection(): Boolean =
+        lastDirectionX * lastDirectionX + lastDirectionY * lastDirectionY > DIRECTION_EPSILON_SQUARED
+
+    data class DashRequest(val directionX: Float, val directionY: Float)
+
     companion object {
         const val DASH_DOUBLE_TAP_MS = 280L
+        private const val DIRECTION_EPSILON_SQUARED = 0.0001f
         /** Fraction of min(canvas W,H) used as stick radius. */
         const val RADIUS_SCREEN_FRACTION = 0.16f
     }

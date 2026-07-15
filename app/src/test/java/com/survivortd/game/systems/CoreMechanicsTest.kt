@@ -106,7 +106,7 @@ class CoreMechanicsTest {
     fun singleTapNoDash() {
         val joystick = VirtualJoystick(state)
         joystick.onTouchDown(10f, 10f, nowMs = 1000L)
-        assertFalse(joystick.consumeDashRequest(), "First tap should not trigger dash")
+        assertNull(joystick.consumeDashRequest(), "First tap should not trigger dash")
     }
 
     @Test

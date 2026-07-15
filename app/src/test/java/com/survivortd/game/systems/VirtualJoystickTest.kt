@@ -108,11 +108,14 @@ class VirtualJoystickTest {
     fun doubleTapDash() {
         val t0 = 1_000_000L
         joystick.onTouchDown(10f, 10f, pointerId = 1, nowMs = t0)
+        joystick.onTouchMove(10f, -90f, pointerId = 1)
         assertFalse(joystick.isDashRequested())
         joystick.onTouchUp(1)
         joystick.onTouchDown(12f, 12f, pointerId = 1, nowMs = t0 + 120)
-        assertTrue(joystick.consumeDashRequest())
-        assertFalse(joystick.consumeDashRequest(), "dash is one-shot")
+        val request = requireNotNull(joystick.consumeDashRequest()) { "double-tap should request a dash" }
+        assertEquals(0f, request.directionX, 0.01f)
+        assertEquals(-1f, request.directionY, 0.01f)
+        assertNull(joystick.consumeDashRequest(), "dash is one-shot")
     }
 
     @Test
