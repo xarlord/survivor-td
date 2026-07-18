@@ -43,13 +43,18 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.components.RenderComponent
@@ -199,6 +204,7 @@ fun GameScreen(
     // background thread; we bump this on the Main dispatcher to trigger redraw.
     // Using Choreographer for VSYNC-aligned updates (no flooding main thread).
     var redrawTrigger by remember { mutableIntStateOf(0) }
+    var gameCanvasSize by remember { mutableStateOf(IntSize.Zero) }
     val renderHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     val renderPending = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
 
@@ -428,6 +434,20 @@ fun GameScreen(
     }
 
     Box(modifier = modifier.fillMaxSize().testTag("game_screen")) {
+        val visibleWorldTransform = if (gameCanvasSize != IntSize.Zero) {
+            VisibleWorldTransform(
+                canvasWidth = gameCanvasSize.width.toFloat(),
+                canvasHeight = gameCanvasSize.height.toFloat(),
+                worldHeight = GameConfig.WORLD_HEIGHT,
+                cameraX = gameState.cameraX,
+                cameraY = gameState.cameraY,
+                shakeX = gameFeelSystem.shakeOffsetX,
+                shakeY = gameFeelSystem.shakeOffsetY
+            )
+        } else {
+            null
+        }
+
         // === LAYER 1: Game Canvas + Touch Input ===
         GameCanvasView(
             gameState = gameState,
@@ -443,6 +463,8 @@ fun GameScreen(
             onJoystickAnchorChange = { joystickAnchor = it },
             onJoystickKnobChange = { joystickKnob = it },
             redrawTrigger = redrawTrigger,
+            visibleWorldTransform = visibleWorldTransform,
+            onCanvasSizeChanged = { gameCanvasSize = it },
             buildPhaseActive = isBuildPhaseUi,
             selectedTower = selectedTower,
             onPlaceTower = { type, wx, wy ->
@@ -607,15 +629,18 @@ fun GameScreen(
         }
 
         // === LAYER 7: Minimap (#98) ===
-        MinimapView(
-            gameState = gameState,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(
-                    end = GameConfig.MINIMAP_MARGIN_DP.dp,
-                    bottom = GameConfig.MINIMAP_MARGIN_DP.dp
-                )
-        )
+        visibleWorldTransform?.let { transform ->
+            MinimapView(
+                gameState = gameState,
+                visibleWorldTransform = transform,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = GameConfig.MINIMAP_MARGIN_DP.dp,
+                        bottom = GameConfig.MINIMAP_MARGIN_DP.dp
+                    )
+            )
+        }
 
         // === LAYER 8: Tutorial Overlay (#95) ===
         if (showTutorial) {
@@ -726,6 +751,8 @@ private fun GameCanvasView(
     onJoystickAnchorChange: (Offset) -> Unit,
     onJoystickKnobChange: (Offset) -> Unit,
     redrawTrigger: Int,
+    visibleWorldTransform: VisibleWorldTransform?,
+    onCanvasSizeChanged: (IntSize) -> Unit,
     buildPhaseActive: Boolean = false,
     selectedTower: com.survivortd.game.config.TowerType? = null,
     onPlaceTower: (com.survivortd.game.config.TowerType, Float, Float) -> Unit = { _, _, _ -> },
@@ -739,6 +766,7 @@ private fun GameCanvasView(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF0A0E1A))
+            .onSizeChanged(onCanvasSizeChanged)
             .pointerInput(inputController, buildPhaseActive, selectedTower) {
                 // Density-aware stick radius (#162)
                 val radius = minOf(size.width, size.height) * VirtualJoystick.RADIUS_SCREEN_FRACTION
@@ -822,16 +850,8 @@ private fun GameCanvasView(
                     }
                 }
     ) {
-        // One transform drives world projection and visible bounds for this frame.
-        val transform = VisibleWorldTransform(
-            canvasWidth = size.width,
-            canvasHeight = size.height,
-            worldHeight = GameConfig.WORLD_HEIGHT,
-            cameraX = gameState.cameraX,
-            cameraY = gameState.cameraY,
-            shakeX = gameFeelSystem.shakeOffsetX,
-            shakeY = gameFeelSystem.shakeOffsetY
-        )
+        // The exact same per-frame transform instance also drives the minimap.
+        val transform = visibleWorldTransform ?: return@Canvas
         val culler = createGameCanvasFrustumCuller(
             transform = transform,
             screenMargin = 100f
@@ -1861,73 +1881,85 @@ private fun StatRow(label: String, value: String) {
 @Composable
 private fun MinimapView(
     gameState: GameState,
+    visibleWorldTransform: VisibleWorldTransform,
     modifier: Modifier = Modifier
 ) {
     Canvas(
         modifier = modifier
             .size(GameConfig.MINIMAP_SIZE_DP.dp)
     ) {
-        val worldW = GameConfig.WORLD_WIDTH
-        val worldH = GameConfig.WORLD_HEIGHT
         val mapSize = size.width
-        val scaleX = mapSize / worldW
-        val scaleY = mapSize / worldH
-        val scale = minOf(scaleX, scaleY)
-        val offsetX = (mapSize - worldW * scale) / 2f
-        val offsetY = (mapSize - worldH * scale) / 2f
+        val projection = MinimapProjection(
+            minimapSize = mapSize,
+            worldWidth = GameConfig.WORLD_WIDTH,
+            worldHeight = GameConfig.WORLD_HEIGHT
+        )
+        val viewport = projection.map(visibleWorldTransform.visibleWorldBounds())
+        val clipCircle = projection.circularClip
+        val circularClip = Path().apply {
+            addOval(
+                Rect(
+                    left = clipCircle.centerX - clipCircle.radius,
+                    top = clipCircle.centerY - clipCircle.radius,
+                    right = clipCircle.centerX + clipCircle.radius,
+                    bottom = clipCircle.centerY + clipCircle.radius
+                )
+            )
+        }
 
-        // Background
         drawCircle(
             color = Color(0xFF0A0E1A).copy(alpha = GameConfig.MINIMAP_ALPHA),
             radius = mapSize / 2f,
             center = center
         )
-        // Border
+
+        // Keep both entity dots and the aspect-sensitive viewport inside the circle.
+        drawContext.canvas.save()
+        try {
+            clipPath(circularClip) {
+                val positions = gameState.positions
+                val healths = gameState.healths
+                val tags = gameState.tags
+                val renders = gameState.renders
+
+                for (i in positions.indices) {
+                    if (i >= healths.size || healths[i].isDead) continue
+                    if (i >= tags.size) continue
+
+                    val x = projection.mapX(positions[i].x)
+                    val y = projection.mapY(positions[i].y)
+                    val color = when (tags[i].tag) {
+                        TagComponent.EntityTag.PLAYER -> Color(0xFF42A5F5)
+                        TagComponent.EntityTag.ENEMY -> {
+                            // Boss check: large radius
+                            val isBoss = i < renders.size && renders[i].radius > 30f
+                            if (isBoss) Color(0xFFFFD700) else Color(0xFFFF1744)
+                        }
+                        TagComponent.EntityTag.TOWER -> Color(0xFF00E676)
+                        else -> continue
+                    }
+                    drawCircle(
+                        color = color,
+                        radius = GameConfig.MINIMAP_DOT_RADIUS,
+                        center = Offset(x, y)
+                    )
+                }
+
+                drawRect(
+                    color = Color.White.copy(alpha = GameConfig.MINIMAP_VIEWPORT_ALPHA),
+                    topLeft = Offset(viewport.left, viewport.top),
+                    size = Size(viewport.width, viewport.height)
+                )
+            }
+        } finally {
+            drawContext.canvas.restore()
+        }
+
         drawCircle(
             color = Color(0xFF333A4D),
             radius = mapSize / 2f,
             center = center,
             style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
-        )
-
-        // Entity dots
-        val positions = gameState.positions
-        val healths = gameState.healths
-        val tags = gameState.tags
-        val renders = gameState.renders
-
-        for (i in positions.indices) {
-            if (i >= healths.size || healths[i].isDead) continue
-            if (i >= tags.size) continue
-
-            val x = positions[i].x * scale + offsetX
-            val y = positions[i].y * scale + offsetY
-            val color = when (tags[i].tag) {
-                TagComponent.EntityTag.PLAYER -> Color(0xFF42A5F5)
-                TagComponent.EntityTag.ENEMY -> {
-                    // Boss check: large radius
-                    val isBoss = i < renders.size && renders[i].radius > 30f
-                    if (isBoss) Color(0xFFFFD700) else Color(0xFFFF1744)
-                }
-                TagComponent.EntityTag.TOWER -> Color(0xFF00E676)
-                else -> continue
-            }
-            drawCircle(
-                color = color,
-                radius = GameConfig.MINIMAP_DOT_RADIUS,
-                center = Offset(x, y)
-            )
-        }
-
-        // Viewport rectangle (camera area)
-        val camX = gameState.cameraX * scale + offsetX
-        val camY = gameState.cameraY * scale + offsetY
-        val vpW = GameConfig.CAMERA_WIDTH * scale
-        val vpH = GameConfig.CAMERA_HEIGHT * scale
-        drawRect(
-            color = Color.White.copy(alpha = GameConfig.MINIMAP_VIEWPORT_ALPHA),
-            topLeft = Offset(camX - vpW / 2f, camY - vpH / 2f),
-            size = androidx.compose.ui.geometry.Size(vpW, vpH)
         )
     }
 }
