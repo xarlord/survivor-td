@@ -8,34 +8,49 @@ import org.junit.jupiter.api.Test
 class BuildPlacementTest {
 
     @Test
-    @DisplayName("screen center maps to camera center")
+    @DisplayName("portrait screen center maps to the visible world center")
     fun centerMapsToCamera() {
-        val (wx, wy) = BuildPlacement.screenToWorld(
-            screenX = 360f,
-            screenY = 640f,
-            canvasW = 720f,
-            canvasH = 1280f,
-            cameraX = 640f,
-            cameraY = 360f
+        val transform = portraitTransform()
+
+        val actual = BuildPlacement.screenToWorld(
+            screenX = 720f,
+            screenY = 1560f,
+            transform = transform
         )
-        assertEquals(640f, wx, 0.5f)
-        assertEquals(360f, wy, 0.5f)
+
+        assertPointEquals(transform.screenToWorld(720f, 1560f), actual)
     }
 
     @Test
-    @DisplayName("top-left screen maps to camera top-left world")
+    @DisplayName("portrait top-left maps to the visible world top-left")
     fun topLeftMaps() {
-        val camX = 640f
-        val camY = 360f
-        val (wx, wy) = BuildPlacement.screenToWorld(
+        val transform = portraitTransform()
+
+        val actual = BuildPlacement.screenToWorld(
             screenX = 0f,
             screenY = 0f,
-            canvasW = 720f,
-            canvasH = 1280f,
-            cameraX = camX,
-            cameraY = camY
+            transform = transform
         )
-        assertEquals(camX - GameConfig.CAMERA_WIDTH / 2f, wx, 0.5f)
-        assertEquals(camY - GameConfig.CAMERA_HEIGHT / 2f, wy, 0.5f)
+
+        assertPointEquals(transform.screenToWorld(0f, 0f), actual)
+    }
+
+    private fun portraitTransform() = VisibleWorldTransform(
+        canvasWidth = 1440f,
+        canvasHeight = 3120f,
+        worldHeight = GameConfig.WORLD_HEIGHT,
+        cameraX = 640f,
+        cameraY = 360f,
+        shakeX = 0f,
+        shakeY = 0f
+    )
+
+    private fun assertPointEquals(expected: Pair<Float, Float>, actual: Pair<Float, Float>) {
+        assertEquals(expected.first, actual.first, EPSILON)
+        assertEquals(expected.second, actual.second, EPSILON)
+    }
+
+    private companion object {
+        const val EPSILON = 0.001f
     }
 }

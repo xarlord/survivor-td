@@ -141,16 +141,6 @@ object BuildPlacement {
     fun screenToWorld(
         screenX: Float,
         screenY: Float,
-        canvasW: Float,
-        canvasH: Float,
-        cameraX: Float,
-        cameraY: Float,
-        cameraW: Float = com.survivortd.game.config.GameConfig.CAMERA_WIDTH,
-        cameraH: Float = com.survivortd.game.config.GameConfig.CAMERA_HEIGHT
-    ): Pair<Float, Float> {
-        if (canvasW <= 0f || canvasH <= 0f) return cameraX to cameraY
-        val worldX = cameraX - cameraW / 2f + (screenX / canvasW) * cameraW
-        val worldY = cameraY - cameraH / 2f + (screenY / canvasH) * cameraH
-        return worldX to worldY
-    }
+        transform: VisibleWorldTransform
+    ): Pair<Float, Float> = transform.screenToWorld(screenX, screenY)
 }

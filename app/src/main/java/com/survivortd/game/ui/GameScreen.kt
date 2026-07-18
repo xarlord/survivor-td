@@ -769,9 +769,17 @@ private fun GameCanvasView(
                                         val camY = if (gameState.playerIndex >= 0)
                                             gameState.positions[gameState.playerIndex].y
                                         else GameConfig.WORLD_HEIGHT / 2f
+                                        val placementTransform = VisibleWorldTransform(
+                                            canvasWidth = size.width.toFloat(),
+                                            canvasHeight = size.height.toFloat(),
+                                            worldHeight = GameConfig.WORLD_HEIGHT,
+                                            cameraX = camX,
+                                            cameraY = camY,
+                                            shakeX = 0f,
+                                            shakeY = 0f
+                                        )
                                         val (wx, wy) = BuildPlacement.screenToWorld(
-                                            pos.x, pos.y, size.width.toFloat(), size.height.toFloat(),
-                                            camX, camY
+                                            pos.x, pos.y, placementTransform
                                         )
                                         onPlaceTower(selectedTower, wx, wy)
                                         change.consume()
