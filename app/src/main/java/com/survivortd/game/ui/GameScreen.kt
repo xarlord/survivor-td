@@ -822,32 +822,39 @@ private fun GameCanvasView(
                     }
                 }
     ) {
-        // Viewport: scale world to fill full screen height, center on player
-        val scale = size.height / GameConfig.WORLD_HEIGHT
-        // Camera offset: center the player on screen + screen shake.
-        // screenX = worldX * scale + camX. For player at cameraX: screenX = cameraX*scale + camX = width/2.
-        val camX = size.width / 2f - gameState.cameraX * scale + gameFeelSystem.shakeOffsetX * scale
-        val camY = size.height / 2f - gameState.cameraY * scale + gameFeelSystem.shakeOffsetY * scale
-
-        // (#115) Frustum culler — compute world-space view bounds for off-screen skip
-        val culler = FrustumCuller().apply {
-            margin = 100f / scale  // margin in world units
-            update(
-                camX = gameState.cameraX - (size.width / scale) / 2f,
-                camY = gameState.cameraY - (size.height / scale) / 2f,
-                viewWidth = size.width / scale,
-                viewHeight = size.height / scale
-            )
-        }
+        // One transform drives world projection and visible bounds for this frame.
+        val transform = VisibleWorldTransform(
+            canvasWidth = size.width,
+            canvasHeight = size.height,
+            worldHeight = GameConfig.WORLD_HEIGHT,
+            cameraX = gameState.cameraX,
+            cameraY = gameState.cameraY,
+            shakeX = gameFeelSystem.shakeOffsetX,
+            shakeY = gameFeelSystem.shakeOffsetY
+        )
+        val culler = createGameCanvasFrustumCuller(
+            transform = transform,
+            screenMargin = 100f
+        )
 
         // World→screen coordinate conversion (replaces broken withTransform).
         // withTransform produces no visible output on some devices/emulators,
         // so we pass screen-space coordinates directly to all draw calls.
-        val toScreenX: (Float) -> Float = { wx -> wx * scale + camX }
-        val toScreenY: (Float) -> Float = { wy -> wy * scale + camY }
-        val toScreenR: (Float) -> Float = { wr -> wr * scale }
+        val toScreenX: (Float) -> Float = transform::worldToScreenX
+        val toScreenY: (Float) -> Float = transform::worldToScreenY
+        val toScreenR: (Float) -> Float = { worldRadius -> worldRadius * transform.scale }
+        val camX = transform.worldToScreenX(0f)
+        val camY = transform.worldToScreenY(0f)
 
-        drawGameBackground(gameState, toScreenX, toScreenY, toScreenR, scale, camX, camY)
+        drawGameBackground(
+            gameState,
+            toScreenX,
+            toScreenY,
+            toScreenR,
+            transform.scale,
+            camX,
+            camY
+        )
         drawEntities(gameState, culler, toScreenX, toScreenY, toScreenR)
         drawParticles(particleSystem, culler, toScreenX, toScreenY, toScreenR)
         drawTowers(towerSystem, culler, toScreenX, toScreenY, toScreenR)

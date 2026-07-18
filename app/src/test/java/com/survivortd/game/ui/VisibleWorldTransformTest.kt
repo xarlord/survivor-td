@@ -78,6 +78,22 @@ class VisibleWorldTransformTest {
     }
 
     @Test
+    fun `axis projections apply the render scale camera and shake`() {
+        val transform = portraitTransform()
+
+        assertEquals(
+            transform.canvasWidth / 2f + transform.shakeX * transform.scale,
+            transform.worldToScreenX(transform.cameraX),
+            EPSILON
+        )
+        assertEquals(
+            transform.canvasHeight / 2f + transform.shakeY * transform.scale,
+            transform.worldToScreenY(transform.cameraY),
+            EPSILON
+        )
+    }
+
+    @Test
     fun `world to screen to world round trips representative points`() {
         val transform = portraitTransform()
         val worldPoints = listOf(

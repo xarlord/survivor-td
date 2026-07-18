@@ -31,12 +31,17 @@ data class VisibleWorldTransform(
     /** World-space y-coordinate displayed at the vertical canvas center. */
     val visibleCenterY: Float = cameraY - shakeY
 
+    /** Projects a world-space x-coordinate into canvas coordinates. */
+    fun worldToScreenX(worldX: Float): Float =
+        (worldX - visibleCenterX) * scale + canvasWidth / 2f
+
+    /** Projects a world-space y-coordinate into canvas coordinates. */
+    fun worldToScreenY(worldY: Float): Float =
+        (worldY - visibleCenterY) * scale + canvasHeight / 2f
+
     /** Projects a world-space point into canvas coordinates. */
-    fun worldToScreen(worldX: Float, worldY: Float): Pair<Float, Float> {
-        val screenX = (worldX - visibleCenterX) * scale + canvasWidth / 2f
-        val screenY = (worldY - visibleCenterY) * scale + canvasHeight / 2f
-        return screenX to screenY
-    }
+    fun worldToScreen(worldX: Float, worldY: Float): Pair<Float, Float> =
+        worldToScreenX(worldX) to worldToScreenY(worldY)
 
     /** Unprojects a canvas point into world coordinates. */
     fun screenToWorld(screenX: Float, screenY: Float): Pair<Float, Float> {
