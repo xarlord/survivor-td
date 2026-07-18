@@ -6,7 +6,10 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.platform.app.InstrumentationRegistry
+import com.survivortd.game.data.SaveManager
 import com.survivortd.game.testing.TestGameBridge
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -82,6 +85,71 @@ class SurvivorTDE2ETest {
     // ================================================================
     // TIER 2: OBJECT-LEVEL TESTS (new — [#26][#35])
     // ================================================================
+
+    @Test
+    fun pending_level_up_waits_for_tutorial_and_opens_once_after_dismissal() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        runBlocking {
+            SaveManager.saveSettings(context, SaveManager.GameSettings(isFirstRun = true))
+        }
+
+        composeRule.mainClock.autoAdvance = false
+        try {
+            composeRule.onNodeWithTag("play_button").performClick()
+            composeRule.mainClock.advanceTimeBy(1000L)
+
+            val bridgeDeadline = System.currentTimeMillis() + 10_000L
+            while (!TestGameBridge.isActive && System.currentTimeMillis() < bridgeDeadline) {
+                Thread.sleep(100L)
+            }
+            assertTrue("TestGameBridge should be active after PLAY", TestGameBridge.isActive)
+
+            val tutorial = composeRule.onAllNodesWithText("LET'S GO!", substring = true)
+            val tutorialDeadline = System.currentTimeMillis() + 5_000L
+            while (tutorial.fetchSemanticsNodes(atLeastOneRootRequired = false).isEmpty() &&
+                System.currentTimeMillis() < tutorialDeadline
+            ) {
+                Thread.sleep(100L)
+            }
+            assertTrue(
+                "Tutorial must be visible before injecting a pending level-up",
+                tutorial.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+            )
+
+            val state = TestGameBridge.rawState()
+            assertNotNull("TestGameBridge raw state should be available", state)
+            state!!.withSynchronizedAccess { state.pendingLevelUps = 1 }
+            val elapsedBeforeDismiss = TestGameBridge.snapshot()!!.elapsedTime
+            composeRule.mainClock.advanceTimeBy(1000L)
+
+            assertTrue(
+                "Tutorial must continue owning input while a level-up is pending",
+                tutorial.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+            )
+            assertEquals(
+                "Level-up dialog must not open while tutorial is active",
+                0,
+                composeRule.onAllNodesWithText("LEVEL UP!", substring = true)
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
+            assertEquals(elapsedBeforeDismiss, TestGameBridge.snapshot()!!.elapsedTime, 0.001f)
+
+            tutorial[0].performClick()
+            composeRule.mainClock.advanceTimeBy(1000L)
+
+            val dialogCount = composeRule.onAllNodesWithText("LEVEL UP!", substring = true)
+                .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            assertEquals("Exactly one level-up dialog must be shown", 1, dialogCount)
+            assertEquals(
+                "Elapsed time must not advance during tutorial-to-level-up handoff",
+                elapsedBeforeDismiss,
+                TestGameBridge.snapshot()!!.elapsedTime,
+                0.001f
+            )
+        } finally {
+            composeRule.mainClock.autoAdvance = true
+        }
+    }
 
     /**
      * Clicks the PLAY button without deadlocking on waitForIdle().

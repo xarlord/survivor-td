@@ -371,7 +371,7 @@ fun GameScreen(
                     repeat(killed) { waveSystem.onEnemyKilled() }
                 }
                 if (requestLevelUp) {
-                    inputController.openLevelUp()
+                    inputController.tryAcquireLevelUp()
                     return@GameLoop
                 }
             },
@@ -514,9 +514,11 @@ fun GameScreen(
                     // [#113] Play level-up SFX
                     AudioManager.getInstance().playSfx(AudioManager.SfxType.LEVEL_UP)
                     if (gameState.pendingLevelUps > 0) {
-                        inputController.openLevelUp()
-                        resetJoystickVisual()
-                        levelUpChoices = levelUpSystem.generateChoices()
+                        val acquisition = inputController.tryAcquireLevelUp()
+                        if (acquisition != GameplayInputController.LevelUpAcquisition.REJECTED_BY_TUTORIAL) {
+                            resetJoystickVisual()
+                            levelUpChoices = levelUpSystem.generateChoices()
+                        }
                     } else {
                         inputController.dismissLevelUp()
                         resetJoystickVisual()
@@ -528,9 +530,11 @@ fun GameScreen(
                     // [#113] Play level-up SFX
                     AudioManager.getInstance().playSfx(AudioManager.SfxType.LEVEL_UP)
                     if (gameState.pendingLevelUps > 0) {
-                        inputController.openLevelUp()
-                        resetJoystickVisual()
-                        levelUpChoices = levelUpSystem.generateChoices()
+                        val acquisition = inputController.tryAcquireLevelUp()
+                        if (acquisition != GameplayInputController.LevelUpAcquisition.REJECTED_BY_TUTORIAL) {
+                            resetJoystickVisual()
+                            levelUpChoices = levelUpSystem.generateChoices()
+                        }
                     } else {
                         inputController.dismissLevelUp()
                         resetJoystickVisual()
@@ -653,9 +657,11 @@ fun GameScreen(
 
             // Check for level-up → freeze simulation and generate choices
             if (gameState.pendingLevelUps > 0 && levelUpChoices.isEmpty()) {
-                inputController.openLevelUp()
-                resetJoystickVisual()
-                levelUpChoices = levelUpSystem.generateChoices()
+                val acquisition = inputController.tryAcquireLevelUp()
+                if (acquisition != GameplayInputController.LevelUpAcquisition.REJECTED_BY_TUTORIAL) {
+                    resetJoystickVisual()
+                    levelUpChoices = levelUpSystem.generateChoices()
+                }
             }
 
             // [#116] Victory condition — survived 15 minutes
