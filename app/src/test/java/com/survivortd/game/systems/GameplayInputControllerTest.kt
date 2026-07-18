@@ -7,6 +7,10 @@ import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 class GameplayInputControllerTest {
 
@@ -41,7 +45,7 @@ class GameplayInputControllerTest {
 
     @Test
     fun levelUpModalFreezesSimulationUntilUpgradeDismissal() {
-        controller.openLevelUp()
+        controller.tryAcquireLevelUp()
         val before = state.elapsedSeconds
 
         repeat(60) { controller.runSimulationIfAllowed(1f / 60f) { state.elapsedSeconds += it } }
@@ -58,8 +62,95 @@ class GameplayInputControllerTest {
     }
 
     @Test
+    fun tutorial_active_pending_level_up_is_rejected_without_transition_or_reset() {
+        controller.openTutorial()
+        state.pendingLevelUps = 1
+        state.joystickX = 0.6f
+        state.joystickY = -0.4f
+
+        val result = controller.tryAcquireLevelUp()
+
+        assertEquals(GameplayInputController.LevelUpAcquisition.REJECTED_BY_TUTORIAL, result)
+        assertEquals(0.6f, state.joystickX)
+        assertEquals(-0.4f, state.joystickY)
+        controller.dismissTutorial()
+        assertTrue(controller.canAdvanceSimulation())
+    }
+
+    @Test
+    fun pending_level_up_after_tutorial_dismissal_is_claimed_once_without_simulation_handoff() {
+        controller.openTutorial()
+        state.pendingLevelUps = 1
+        val before = state.elapsedSeconds
+
+        repeat(10) {
+            controller.runSimulationIfAllowed(1f / 60f) { state.elapsedSeconds += it }
+        }
+        controller.dismissTutorial()
+        var choicesEmpty = true
+        var generatedChoices = 0
+        repeat(2) {
+            if (state.pendingLevelUps > 0 && choicesEmpty) {
+                val acquisition = controller.tryAcquireLevelUp()
+                if (acquisition != GameplayInputController.LevelUpAcquisition.REJECTED_BY_TUTORIAL) {
+                    generatedChoices++
+                    choicesEmpty = false
+                }
+            }
+        }
+
+        assertEquals(1, generatedChoices)
+        assertTrue(controller.isModalBlocking())
+        assertEquals(before, state.elapsedSeconds)
+        assertFalse(controller.canAdvanceSimulation())
+    }
+
+    @Test
+    fun existing_level_up_allows_choice_population_without_reopening_or_resetting_input() {
+        val first = controller.tryAcquireLevelUp()
+        state.joystickX = -0.35f
+        state.joystickY = 0.2f
+
+        val second = controller.tryAcquireLevelUp()
+
+        assertEquals(GameplayInputController.LevelUpAcquisition.ACQUIRED, first)
+        assertEquals(GameplayInputController.LevelUpAcquisition.ALREADY_ACTIVE, second)
+        assertEquals(-0.35f, state.joystickX)
+        assertEquals(0.2f, state.joystickY)
+        assertFalse(controller.canAdvanceSimulation())
+    }
+
+    @Test
+    fun concurrent_level_up_requests_have_one_acquisition_and_no_reopen_race() {
+        val ready = CountDownLatch(8)
+        val start = CountDownLatch(1)
+        val results = Collections.synchronizedList(
+            mutableListOf<GameplayInputController.LevelUpAcquisition>()
+        )
+        val workers = List(8) {
+            thread(start = true) {
+                ready.countDown()
+                assertTrue(start.await(1, TimeUnit.SECONDS))
+                results += controller.tryAcquireLevelUp()
+            }
+        }
+
+        assertTrue(ready.await(1, TimeUnit.SECONDS))
+        start.countDown()
+        workers.forEach { it.join(1_000) }
+
+        assertEquals(1, results.count {
+            it == GameplayInputController.LevelUpAcquisition.ACQUIRED
+        })
+        assertEquals(7, results.count {
+            it == GameplayInputController.LevelUpAcquisition.ALREADY_ACTIVE
+        })
+        assertFalse(controller.canAdvanceSimulation())
+    }
+
+    @Test
     fun blockingModalConsumesTouchAndDragWithoutReachingGameplay() {
-        controller.openLevelUp()
+        controller.tryAcquireLevelUp()
 
         assertTrue(controller.onPointerDown(x = 100f, y = 300f, screenWidth = 1000f, pointerId = 11L))
         assertTrue(controller.onPointerMove(x = 300f, y = 100f, pointerId = 11L))
@@ -137,7 +228,7 @@ class GameplayInputControllerTest {
 
         controller.onPointerDown(x = 100f, y = 300f, screenWidth = 1000f, pointerId = 2L)
         controller.onPointerMove(x = 250f, y = 300f, pointerId = 2L)
-        controller.openLevelUp()
+        controller.tryAcquireLevelUp()
         assertJoystickReset()
 
         controller.dismissLevelUp()

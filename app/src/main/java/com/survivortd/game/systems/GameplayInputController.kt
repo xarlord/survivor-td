@@ -13,6 +13,12 @@ class GameplayInputController(
     private val state: GameState,
     private val joystick: VirtualJoystick
 ) {
+    enum class LevelUpAcquisition {
+        ACQUIRED,
+        ALREADY_ACTIVE,
+        REJECTED_BY_TUTORIAL
+    }
+
     private enum class Modal {
         NONE,
         TUTORIAL,
@@ -35,10 +41,26 @@ class GameplayInputController(
         closeModal(Modal.TUTORIAL)
     }
 
+    /**
+     * Atomically arbitrate a pending level-up against the tutorial modal.
+     *
+     * The caller may populate choices for [ACQUIRED] and [ALREADY_ACTIVE].
+     * Only [ACQUIRED] changes the modal or resets gameplay input; a tutorial
+     * rejection is a no-op.
+     */
     @Synchronized
-    fun openLevelUp() {
-        openModal(Modal.LEVEL_UP)
+    fun tryAcquireLevelUp(): LevelUpAcquisition = when (modal) {
+        Modal.TUTORIAL -> LevelUpAcquisition.REJECTED_BY_TUTORIAL
+        Modal.NONE -> {
+            openModal(Modal.LEVEL_UP)
+            LevelUpAcquisition.ACQUIRED
+        }
+        Modal.LEVEL_UP -> LevelUpAcquisition.ALREADY_ACTIVE
     }
+
+    /** Compatibility entry point; acquisition remains atomic and idempotent. */
+    @Synchronized
+    fun openLevelUp(): LevelUpAcquisition = tryAcquireLevelUp()
 
     @Synchronized
     fun dismissLevelUp() {
