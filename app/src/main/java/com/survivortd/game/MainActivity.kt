@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,7 +74,14 @@ fun SurvivorTDApp() {
     }
 
     SurvivorTDTheme {
-        NavHost(navController = navController, startDestination = Screen.MENU.name) {
+        NavHost(
+            navController = navController,
+            startDestination = Screen.MENU.name,
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { ExitTransition.None }
+        ) {
             composable(Screen.MENU.name) {
                 // Refresh gold from JSON every time menu is composed
                 LaunchedEffect(Unit) { refreshMeta() }
