@@ -63,7 +63,10 @@ object TestGameBridge {
      */
     fun snapshot(): GameSnapshot? {
         val state = _gameState ?: return null
-        return synchronized(state) {
+        // The game loop uses the same dedicated lock for the complete update tick.
+        // Locking on GameState itself was not enough after the engine refactor,
+        // because the loop no longer synchronized on that monitor.
+        return state.withSynchronizedAccess {
             val playerIdx = state.playerIndex
             val player = state.players.getOrNull(playerIdx)
             // Count live enemies (tag == ENEMY and not dead)
