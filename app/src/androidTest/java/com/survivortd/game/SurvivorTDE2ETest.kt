@@ -2,6 +2,7 @@ package com.survivortd.game
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -80,6 +81,69 @@ class SurvivorTDE2ETest {
         clickPlayButton()
         Thread.sleep(15000)
         assertTrue(composeRule.activity.window.decorView.isAttachedToWindow)
+    }
+
+    @Test
+    fun navigating_to_game_is_route_exclusive_with_paused_clock() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        runBlocking {
+            SaveManager.saveSettings(context, SaveManager.GameSettings(isFirstRun = true))
+        }
+
+        composeRule.mainClock.autoAdvance = false
+        try {
+            composeRule.onNodeWithTag("play_button").performClick()
+            composeRule.mainClock.advanceTimeBy(100L)
+
+            val gameScreen = composeRule.onAllNodesWithTag("game_screen")
+            val gameDeadline = System.currentTimeMillis() + 10_000L
+            while (gameScreen.fetchSemanticsNodes(atLeastOneRootRequired = false).isEmpty() &&
+                System.currentTimeMillis() < gameDeadline
+            ) {
+                Thread.sleep(100L)
+            }
+            assertTrue(
+                "Game route must compose after PLAY with a paused clock",
+                gameScreen.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+            )
+            assertEquals(
+                "Outgoing menu route must be disposed before tutorial interaction",
+                0,
+                composeRule.onAllNodesWithTag("main_menu")
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
+
+            val tutorial = composeRule.onAllNodesWithText("LET'S GO!", substring = true)
+            val tutorialDeadline = System.currentTimeMillis() + 5_000L
+            while (tutorial.fetchSemanticsNodes(atLeastOneRootRequired = false).isEmpty() &&
+                System.currentTimeMillis() < tutorialDeadline
+            ) {
+                Thread.sleep(100L)
+            }
+            assertTrue(
+                "First-run tutorial must own the exclusive game route",
+                tutorial.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+            )
+
+            tutorial[0].performClick()
+            composeRule.mainClock.advanceTimeBy(1000L)
+
+            assertEquals(
+                "Tutorial must be dismissed before gameplay resumes",
+                0,
+                composeRule.onAllNodesWithText("LET'S GO!", substring = true)
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
+            assertEquals(
+                "Menu route must stay disposed after tutorial dismissal",
+                0,
+                composeRule.onAllNodesWithTag("main_menu")
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
+            composeRule.onNodeWithTag("game_screen").assertIsDisplayed()
+        } finally {
+            composeRule.mainClock.autoAdvance = true
+        }
     }
 
     // ================================================================
