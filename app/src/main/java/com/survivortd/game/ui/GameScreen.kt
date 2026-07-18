@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.setValue
@@ -761,6 +762,7 @@ private fun GameCanvasView(
     // [#23] Read redrawTrigger so Compose knows to recompose when it changes
     @Suppress("UNUSED_VARIABLE")
     val trigger = redrawTrigger
+    val currentVisibleWorldTransform by rememberUpdatedState(visibleWorldTransform)
 
     Canvas(
         modifier = modifier
@@ -791,21 +793,11 @@ private fun GameCanvasView(
                                     if (buildPhaseActive && selectedTower != null &&
                                         change.pressed && change.previousPressed.not()
                                     ) {
-                                        val camX = if (gameState.playerIndex >= 0)
-                                            gameState.positions[gameState.playerIndex].x
-                                        else GameConfig.WORLD_WIDTH / 2f
-                                        val camY = if (gameState.playerIndex >= 0)
-                                            gameState.positions[gameState.playerIndex].y
-                                        else GameConfig.WORLD_HEIGHT / 2f
-                                        val placementTransform = VisibleWorldTransform(
-                                            canvasWidth = size.width.toFloat(),
-                                            canvasHeight = size.height.toFloat(),
-                                            worldHeight = GameConfig.WORLD_HEIGHT,
-                                            cameraX = camX,
-                                            cameraY = camY,
-                                            shakeX = 0f,
-                                            shakeY = 0f
-                                        )
+                                        val placementTransform = currentVisibleWorldTransform
+                                        if (placementTransform == null) {
+                                            change.consume()
+                                            continue
+                                        }
                                         val (wx, wy) = BuildPlacement.screenToWorld(
                                             pos.x, pos.y, placementTransform
                                         )

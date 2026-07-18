@@ -8,8 +8,8 @@ import org.junit.jupiter.api.Test
 class BuildPlacementTest {
 
     @Test
-    @DisplayName("portrait screen center maps to the visible world center")
-    fun centerMapsToCamera() {
+    @DisplayName("portrait center placement uses the shaken visible world center")
+    fun centerUsesCameraAndShake() {
         val transform = portraitTransform()
 
         val actual = BuildPlacement.screenToWorld(
@@ -18,12 +18,12 @@ class BuildPlacementTest {
             transform = transform
         )
 
-        assertPointEquals(transform.screenToWorld(720f, 1560f), actual)
+        assertWorldPointEquals(expectedX = 628f, expectedY = 366f, actual = actual)
     }
 
     @Test
-    @DisplayName("portrait top-left maps to the visible world top-left")
-    fun topLeftMaps() {
+    @DisplayName("portrait top-left placement uses camera, shake, and portrait scale")
+    fun topLeftUsesCameraShakeAndPortraitScale() {
         val transform = portraitTransform()
 
         val actual = BuildPlacement.screenToWorld(
@@ -32,7 +32,11 @@ class BuildPlacementTest {
             transform = transform
         )
 
-        assertPointEquals(transform.screenToWorld(0f, 0f), actual)
+        assertWorldPointEquals(
+            expectedX = 461.84616f,
+            expectedY = 6.000013f,
+            actual = actual
+        )
     }
 
     private fun portraitTransform() = VisibleWorldTransform(
@@ -41,13 +45,17 @@ class BuildPlacementTest {
         worldHeight = GameConfig.WORLD_HEIGHT,
         cameraX = 640f,
         cameraY = 360f,
-        shakeX = 0f,
-        shakeY = 0f
+        shakeX = 12f,
+        shakeY = -6f
     )
 
-    private fun assertPointEquals(expected: Pair<Float, Float>, actual: Pair<Float, Float>) {
-        assertEquals(expected.first, actual.first, EPSILON)
-        assertEquals(expected.second, actual.second, EPSILON)
+    private fun assertWorldPointEquals(
+        expectedX: Float,
+        expectedY: Float,
+        actual: Pair<Float, Float>
+    ) {
+        assertEquals(expectedX, actual.first, EPSILON)
+        assertEquals(expectedY, actual.second, EPSILON)
     }
 
     private companion object {
