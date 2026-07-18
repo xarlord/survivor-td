@@ -652,7 +652,9 @@ fun GameScreen(
             hudTowers = towerSystem.towers.size
 
             // Check for level-up → freeze simulation and generate choices
-            if (gameState.pendingLevelUps > 0 && levelUpChoices.isEmpty()) {
+            if (gameState.pendingLevelUps > 0 && levelUpChoices.isEmpty() &&
+                !inputController.isModalBlocking()
+            ) {
                 inputController.openLevelUp()
                 resetJoystickVisual()
                 levelUpChoices = levelUpSystem.generateChoices()

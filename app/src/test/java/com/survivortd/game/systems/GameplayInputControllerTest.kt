@@ -58,6 +58,17 @@ class GameplayInputControllerTest {
     }
 
     @Test
+    fun tutorial_owns_modal_arbitration_until_dismissed() {
+        controller.openTutorial()
+        controller.openLevelUp()
+
+        controller.dismissTutorial()
+
+        assertTrue(controller.canAdvanceSimulation())
+        assertFalse(controller.isModalBlocking())
+    }
+
+    @Test
     fun blockingModalConsumesTouchAndDragWithoutReachingGameplay() {
         controller.openLevelUp()
 

@@ -27,6 +27,7 @@ class GameplayInputController(
 
     @Synchronized
     fun openTutorial() {
+        if (modal == Modal.LEVEL_UP) return
         openModal(Modal.TUTORIAL)
     }
 
@@ -37,6 +38,7 @@ class GameplayInputController(
 
     @Synchronized
     fun openLevelUp() {
+        if (modal == Modal.TUTORIAL) return
         openModal(Modal.LEVEL_UP)
     }
 
