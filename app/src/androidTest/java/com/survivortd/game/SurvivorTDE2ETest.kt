@@ -2,6 +2,7 @@ package com.survivortd.game
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -95,8 +96,22 @@ class SurvivorTDE2ETest {
         try {
             composeRule.onNodeWithTag("play_button").performClick()
             composeRule.mainClock.advanceTimeBy(1000L)
+            dismissTutorialIfPresent()
         } finally {
             composeRule.mainClock.autoAdvance = true
+        }
+    }
+
+    private fun dismissTutorialIfPresent() {
+        val tutorialButtons = composeRule.onAllNodesWithText("LET'S GO!", substring = true)
+        val deadline = System.currentTimeMillis() + 3000L
+        while (System.currentTimeMillis() < deadline) {
+            if (tutorialButtons.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()) {
+                tutorialButtons[0].performClick()
+                composeRule.mainClock.advanceTimeBy(1000L)
+                return
+            }
+            Thread.sleep(100L)
         }
     }
 

@@ -63,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.survivortd.game.data.SaveManager
 import com.survivortd.game.systems.AudioManager
 import com.survivortd.game.systems.CombatSystem
+import com.survivortd.game.systems.GameplayInputController
 import com.survivortd.game.systems.LevelUpSystem
 import com.survivortd.game.systems.MetaProgression
 import com.survivortd.game.systems.UpgradeChoice
@@ -76,6 +77,51 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
+
+/**
+ * Executes one simulation boundary. Modal sampling is supplied by the caller
+ * before this function takes the game-state lock; controller mutation happens
+ * only after the lock is released.
+ */
+internal fun runSimulationTickBoundary(
+    gameState: GameState,
+    isPaused: Boolean,
+    modalBlocking: Boolean,
+    canAdvanceSimulation: Boolean,
+    dt: Float,
+    updateGameFeel: () -> Float,
+    updateThroughProjectile: (Float) -> Unit,
+    updateRemaining: (Float) -> Unit,
+    openLevelUp: () -> Unit
+) {
+    if (gameState.isPaused || gameState.isGameOver || isPaused) return
+    if (modalBlocking || !canAdvanceSimulation) return
+
+    var requestLevelUp = false
+    gameState.withSynchronizedAccess {
+        if (gameState.isPaused || gameState.isGameOver || isPaused) {
+            return@withSynchronizedAccess
+        }
+        if (gameState.pendingLevelUps > 0) {
+            requestLevelUp = true
+            return@withSynchronizedAccess
+        }
+
+        val effectiveDt = updateGameFeel()
+        if (effectiveDt <= 0f) return@withSynchronizedAccess
+        updateThroughProjectile(effectiveDt)
+        if (gameState.pendingLevelUps > 0) {
+            requestLevelUp = true
+            return@withSynchronizedAccess
+        }
+        updateRemaining(effectiveDt)
+    }
+
+    if (requestLevelUp) {
+        openLevelUp()
+        return
+    }
+}
 
 /**
  * Root game screen. Manages the strict rendering layer hierarchy:
@@ -176,7 +222,20 @@ fun GameScreen(
     var joystickAnchor by remember { mutableStateOf(Offset.Zero) }
     var joystickKnob by remember { mutableStateOf(Offset.Zero) }
 
+    fun resetJoystickVisual() {
+        joystickActive = false
+        joystickAnchor = Offset.Zero
+        joystickKnob = Offset.Zero
+    }
+
     val joystick = remember { VirtualJoystick(gameState) }
+    val inputController = remember { GameplayInputController(gameState, joystick) }
+    // Hold the simulation until first-run settings resolve. If the tutorial is
+    // needed it remains held until the player explicitly dismisses it.
+    remember(inputController) {
+        inputController.openTutorial()
+        true
+    }
 
     // Level-up system state
     val weaponSystem = remember { WeaponSystem(gameState) }
@@ -269,38 +328,51 @@ fun GameScreen(
         GameLoop(
             onUpdate = { dt ->
                 if (gameState.isPaused || gameState.isGameOver || isPaused) return@GameLoop
-                // Serialize the complete simulation tick with TestGameBridge snapshots.
-                // Without this, snapshots can observe entity arrays between cleanup
-                // and spawn operations and report a false zero-enemy state.
+                val modalBlocking = inputController.isModalBlocking()
+                val canAdvanceSimulation = inputController.canAdvanceSimulation()
+                if (modalBlocking || !canAdvanceSimulation) return@GameLoop
+
+                var requestLevelUp = false
                 gameState.withSynchronizedAccess {
+                    if (gameState.isPaused || gameState.isGameOver || isPaused) {
+                        return@withSynchronizedAccess
+                    }
+                    if (gameState.pendingLevelUps > 0) {
+                        requestLevelUp = true
+                        return@withSynchronizedAccess
+                    }
+
                     // Game feel first — returns effective dt (0 during hit-stop)
                     val effectiveDt = gameFeelSystem.update(dt)
-                    if (effectiveDt <= 0f) return@withSynchronizedAccess  // Hit-stop freeze
+                    if (effectiveDt <= 0f) return@withSynchronizedAccess
 
-                    // [#21] Wave system FIRST — spawns enemies for other systems to process
+                    // Existing systems through projectile update stay in the atomic tick.
                     waveSystem.update(effectiveDt)
-                    // Sync build phase flag for TowerSystem + UI
                     towerSystem.isBuildPhase = waveSystem.isBuildPhase
-                    // [#119] Hero passives (must run before movement/combat for berserker/scout/shielder)
                     heroPassiveSystem.applyPassive(hero, gameState, effectiveDt)
-                    // System update order: AI → Movement → Status → Combat → Towers → Weapons → Projectiles → Pickups
                     enemyAiSystem.update(effectiveDt)
                     movementSystem.update(effectiveDt)
                     statusEffectSystem.update(effectiveDt)
                     combatSystem.update(effectiveDt)
-                    // [#22] Tower system — auto-targets and fires at enemies
                     towerSystem.update(effectiveDt)
                     weaponSystem.update(effectiveDt)
                     projectileSystem.update(effectiveDt)
+                    if (gameState.pendingLevelUps > 0) {
+                        requestLevelUp = true
+                        return@withSynchronizedAccess
+                    }
+
                     pickupSystem.update(effectiveDt)
-                    // [#118] Sprite animation — advance frames after all movement/combat settled
                     spriteAnimationSystem.update(effectiveDt)
                     damageNumberSystem.update(effectiveDt)
-                    // Particles always update (even during hit-stop for visual continuity)
                     particleSystem.update(dt)
                     gameState.elapsedSeconds += effectiveDt
                     val killed = gameState.cleanupDeadEntities()
                     repeat(killed) { waveSystem.onEnemyKilled() }
+                }
+                if (requestLevelUp) {
+                    inputController.openLevelUp()
+                    return@GameLoop
                 }
             },
             onRender = {
@@ -334,11 +406,18 @@ fun GameScreen(
         MetaProgression.applyToGameState(meta, gameState)
         // [#95] Check first-run tutorial
         val settings = SaveManager.loadSettings(context).first()
-        showTutorial = settings.isFirstRun
+        if (settings.isFirstRun) {
+            inputController.openTutorial()
+            showTutorial = true
+        } else {
+            inputController.dismissTutorial()
+            showTutorial = false
+        }
     }
 
     DisposableEffect(Unit) {
         onDispose {
+            inputController.dispose()
             gameLoop.stop()
             gameLoopScope.cancel()
             // [#26] Unregister from TestGameBridge (debug only)
@@ -356,6 +435,7 @@ fun GameScreen(
             gameFeelSystem = gameFeelSystem,
             towerSystem = towerSystem,
             joystick = joystick,
+            inputController = inputController,
             joystickActive = joystickActive,
             joystickAnchor = joystickAnchor,
             joystickKnob = joystickKnob,
@@ -434,8 +514,12 @@ fun GameScreen(
                     // [#113] Play level-up SFX
                     AudioManager.getInstance().playSfx(AudioManager.SfxType.LEVEL_UP)
                     if (gameState.pendingLevelUps > 0) {
+                        inputController.openLevelUp()
+                        resetJoystickVisual()
                         levelUpChoices = levelUpSystem.generateChoices()
                     } else {
+                        inputController.dismissLevelUp()
+                        resetJoystickVisual()
                         levelUpChoices = emptyList()
                     }
                 },
@@ -444,8 +528,12 @@ fun GameScreen(
                     // [#113] Play level-up SFX
                     AudioManager.getInstance().playSfx(AudioManager.SfxType.LEVEL_UP)
                     if (gameState.pendingLevelUps > 0) {
+                        inputController.openLevelUp()
+                        resetJoystickVisual()
                         levelUpChoices = levelUpSystem.generateChoices()
                     } else {
+                        inputController.dismissLevelUp()
+                        resetJoystickVisual()
                         levelUpChoices = emptyList()
                     }
                 }
@@ -491,6 +579,8 @@ fun GameScreen(
                 weapons = summaryWeapons,
                 isVictory = summaryIsVictory,
                 onPlayAgain = {
+                    inputController.restart()
+                    resetJoystickVisual()
                     showRunSummary = false
                     gameState.reset()
                     if (gameState.playerIndex < 0) {
@@ -527,6 +617,8 @@ fun GameScreen(
         if (showTutorial) {
             val rememberScope = rememberCoroutineScope()
             TutorialOverlay(onDismiss = {
+                inputController.dismissTutorial()
+                resetJoystickVisual()
                 showTutorial = false
                 rememberScope.launch(Dispatchers.IO) {
                     SaveManager.markFirstRunComplete(context)
@@ -559,8 +651,10 @@ fun GameScreen(
             hudWeapons = weaponSystem.weapons.size
             hudTowers = towerSystem.towers.size
 
-            // Check for level-up → generate choices (game continues, no pause)
+            // Check for level-up → freeze simulation and generate choices
             if (gameState.pendingLevelUps > 0 && levelUpChoices.isEmpty()) {
+                inputController.openLevelUp()
+                resetJoystickVisual()
                 levelUpChoices = levelUpSystem.generateChoices()
             }
 
@@ -618,6 +712,7 @@ private fun GameCanvasView(
     gameFeelSystem: com.survivortd.game.systems.GameFeelSystem,
     towerSystem: com.survivortd.game.systems.TowerSystem,
     joystick: VirtualJoystick,
+    inputController: GameplayInputController,
     joystickActive: Boolean,
     joystickAnchor: Offset,
     joystickKnob: Offset,
@@ -638,72 +733,80 @@ private fun GameCanvasView(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF0A0E1A))
-            .pointerInput(buildPhaseActive, selectedTower) {
+            .pointerInput(inputController, buildPhaseActive, selectedTower) {
                 // Density-aware stick radius (#162)
                 val radius = minOf(size.width, size.height) * VirtualJoystick.RADIUS_SCREEN_FRACTION
                 joystick.setMaxRadius(radius)
 
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        // Prefer the pointer that owns the stick; else first changed
-                        val changes = event.changes
-                        val ownerId = joystick.activePointerId()
-                        val change = when {
-                            ownerId >= 0 ->
-                                changes.firstOrNull { it.id.value.toLong() == ownerId }
-                                    ?: changes.firstOrNull()
-                            else -> changes.firstOrNull()
-                        } ?: continue
-
-                        val pos = change.position
-                        val pid = change.id.value.toLong()
-
-                        // Build phase placement: press start places tower (tap)
-                        if (buildPhaseActive && selectedTower != null &&
-                            change.pressed && change.previousPressed.not()
-                        ) {
-                            val camX = if (gameState.playerIndex >= 0)
-                                gameState.positions[gameState.playerIndex].x
-                            else GameConfig.WORLD_WIDTH / 2f
-                            val camY = if (gameState.playerIndex >= 0)
-                                gameState.positions[gameState.playerIndex].y
-                            else GameConfig.WORLD_HEIGHT / 2f
-                            val (wx, wy) = BuildPlacement.screenToWorld(
-                                pos.x, pos.y, size.width.toFloat(), size.height.toFloat(),
-                                camX, camY
-                            )
-                            onPlaceTower(selectedTower, wx, wy)
-                            change.consume()
-                            continue
-                        }
-
-                        when {
-                            change.pressed && change.previousPressed.not() && !joystick.active() -> {
-                                if (buildPhaseActive && selectedTower != null) continue
-                                joystick.onTouchDown(pos.x, pos.y, pointerId = pid)
-                                onJoystickActiveChange(true)
-                                onJoystickAnchorChange(Offset(pos.x, pos.y))
-                                onJoystickKnobChange(Offset(pos.x, pos.y))
-                                change.consume()
-                            }
-                            change.pressed && joystick.active() -> {
-                                joystick.onTouchMove(pos.x, pos.y, pointerId = pid)
-                                val (kx, ky) = joystick.knobPosition()
-                                onJoystickKnobChange(Offset(kx, ky))
-                                change.consume()
-                            }
-                            !change.pressed && joystick.active() -> {
-                                joystick.onTouchUp(pointerId = pid)
-                                if (!joystick.active()) {
-                                    onJoystickActiveChange(false)
+                try {
+                    awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                if (inputController.isModalBlocking()) {
+                                    event.changes.forEach { it.consume() }
+                                    continue
                                 }
-                                change.consume()
+
+                                // Process every changed pointer without allowing a
+                                // foreign pointer to replace the joystick owner.
+                                for (change in event.changes) {
+                                    val pos = change.position
+                                    val pid = change.id.value.toLong()
+
+                                    // Build phase placement: press start places tower (tap)
+                                    if (buildPhaseActive && selectedTower != null &&
+                                        change.pressed && change.previousPressed.not()
+                                    ) {
+                                        val camX = if (gameState.playerIndex >= 0)
+                                            gameState.positions[gameState.playerIndex].x
+                                        else GameConfig.WORLD_WIDTH / 2f
+                                        val camY = if (gameState.playerIndex >= 0)
+                                            gameState.positions[gameState.playerIndex].y
+                                        else GameConfig.WORLD_HEIGHT / 2f
+                                        val (wx, wy) = BuildPlacement.screenToWorld(
+                                            pos.x, pos.y, size.width.toFloat(), size.height.toFloat(),
+                                            camX, camY
+                                        )
+                                        onPlaceTower(selectedTower, wx, wy)
+                                        change.consume()
+                                        continue
+                                    }
+
+                                    val consumed = when {
+                                        change.pressed && change.previousPressed.not() ->
+                                            inputController.onPointerDown(
+                                                x = pos.x,
+                                                y = pos.y,
+                                                screenWidth = size.width.toFloat(),
+                                                pointerId = pid
+                                            )
+                                        change.pressed ->
+                                            inputController.onPointerMove(pos.x, pos.y, pid)
+                                        else ->
+                                            inputController.onPointerUp(pid)
+                                    }
+                                    if (consumed) change.consume()
+
+                                    if (joystick.active()) {
+                                        val (kx, ky) = joystick.knobPosition()
+                                        onJoystickActiveChange(true)
+                                        onJoystickAnchorChange(Offset(joystick.anchor().first, joystick.anchor().second))
+                                        onJoystickKnobChange(Offset(kx, ky))
+                                    } else {
+                                        onJoystickActiveChange(false)
+                                    }
+                                }
                             }
                         }
+                    } finally {
+                        // Pointer cancellation (system gesture, recomposition,
+                        // or disposal) must not leave movement latched.
+                        inputController.onPointerCancel()
+                        onJoystickActiveChange(false)
+                        onJoystickAnchorChange(Offset.Zero)
+                        onJoystickKnobChange(Offset.Zero)
                     }
                 }
-            }
     ) {
         // Viewport: scale world to fill full screen height, center on player
         val scale = size.height / GameConfig.WORLD_HEIGHT
