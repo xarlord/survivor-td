@@ -43,7 +43,18 @@ class VirtualJoystick(
 
     fun maxRadius(): Float = maxRadius
 
-    fun onTouchDown(x: Float, y: Float, pointerId: Long = 0L, nowMs: Long = System.currentTimeMillis()) {
+    fun onTouchDown(
+        x: Float,
+        y: Float,
+        pointerId: Long = 0L,
+        nowMs: Long = System.currentTimeMillis(),
+        screenWidth: Float = Float.POSITIVE_INFINITY
+    ) {
+        // One pointer owns a joystick gesture for its whole lifetime. A second
+        // finger must never replace the owner or restart the anchor.
+        if (isActive) return
+        if (x >= screenWidth * LEFT_HALF_FRACTION) return
+
         // Double-tap dash detection (touch-down only — never per physics tick).
         // The new touch starts at the stick center, so it must use the last
         // meaningful direction rather than state.joystickX/Y after reset.
@@ -101,6 +112,20 @@ class VirtualJoystick(
         state.joystickY = 0f
     }
 
+    /** Clears every pointer and transient dash state at an input boundary. */
+    fun reset() {
+        isActive = false
+        activePointerId = -1L
+        anchorX = -1f
+        anchorY = -1f
+        lastTapTimeMs = 0L
+        lastDirectionX = 0f
+        lastDirectionY = 0f
+        dashRequest = null
+        state.joystickX = 0f
+        state.joystickY = 0f
+    }
+
     fun active(): Boolean = isActive
 
     fun activePointerId(): Long = activePointerId
@@ -130,6 +155,7 @@ class VirtualJoystick(
 
     companion object {
         private const val DIRECTION_EPSILON_SQUARED = 0.0001f
+        private const val LEFT_HALF_FRACTION = 0.5f
         /** Fraction of min(canvas W,H) used as stick radius. */
         const val RADIUS_SCREEN_FRACTION = 0.16f
     }
