@@ -52,6 +52,28 @@ for parser_line in "$failure_line" "$pending_line"; do
     fail "workflow parser does not slurp CHECKS NDJSON before filtering"
 done
 
+# The merge must run in a checked-out repository and fail loudly on errors.
+checkout_line="$(grep -n -F 'uses: actions/checkout@v4' "$WORKFLOW" | cut -d: -f1 | tail -1)" || true
+[[ -n "$checkout_line" ]] || fail 'workflow has no checkout before merge'
+merge_step_line="$(grep -n -F 'gh pr merge' "$WORKFLOW" | cut -d: -f1 | tail -1)" || true
+[[ -n "$merge_step_line" && "$checkout_line" -lt "$merge_step_line" ]] || \
+  fail 'checkout must occur before the merge command'
+checkout_block="$(sed -n "${checkout_line},$((checkout_line + 4))p" "$WORKFLOW")"
+[[ "$checkout_block" == *'persist-credentials: false'* ]] || \
+  fail 'checkout must disable persisted credentials'
+[[ "$checkout_block" == *'fetch-depth: 1'* ]] || fail 'checkout must use fetch-depth 1'
+merge_block="$(sed -n "$((merge_step_line - 8)),${merge_step_line}p" "$WORKFLOW")"
+[[ "$merge_block" == *'GH_REPO: ${{ github.repository }}'* ]] || \
+  fail 'merge step must set explicit GH_REPO'
+[[ "$merge_block" == *'GH_TOKEN: ${{ github.token }}'* ]] || \
+  fail 'merge step must set GH_TOKEN from github.token'
+[[ "$merge_block" == *'set -euo pipefail'* ]] || fail 'merge step must fail loudly'
+[[ "$merge_block" == *'--repo "$GH_REPO" --squash'* ]] || \
+  fail 'merge command must pass explicit repository and squash'
+! grep -Fq -- '--admin' "$WORKFLOW" || fail 'forbidden --admin merge bypass remains'
+! grep -Fq '|| true' "$WORKFLOW" || fail 'forbidden merge soft-fail remains'
+! grep -Fq 'continue-on-error' "$WORKFLOW" || fail 'forbidden continue-on-error remains'
+
 parse_failures() {
   printf '%s\n' "$1" | jq -sc '[.[] | select(type == "object" and .conclusion == "FAILURE")]'
 }

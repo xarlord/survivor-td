@@ -40,4 +40,18 @@ jobs:
           fi
 
           echo "::notice::All checks passed, merging PR #${{ github.event.pull_request.number }}"
-          gh pr merge ${{ github.event.pull_request.number }} --squash --admin || true
+
+      - name: Checkout before merge
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Auto-merge PR
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          gh pr merge "$PR_NUMBER" --repo "$GH_REPO" --squash
