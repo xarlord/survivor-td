@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Unit tests for [TestGameBridge] — the E2E bridge that lets instrumentation
@@ -104,5 +106,36 @@ class TestGameBridgeTest {
         val state = TestGameBridge.rawState()
         assertNotNull(state)
         assertEquals(gameState, state)
+    }
+
+    @Test
+    @DisplayName("Snapshot waits for an atomic game-state update")
+    fun snapshotWaitsForAtomicStateUpdate() {
+        TestGameBridge.register(gameState)
+        val updateStarted = CountDownLatch(1)
+        val snapshotEntered = CountDownLatch(1)
+
+        val writer = Thread {
+            gameState.withSynchronizedAccess {
+                updateStarted.countDown()
+                Thread.sleep(200)
+            }
+        }
+        writer.start()
+        assertTrue(updateStarted.await(1, TimeUnit.SECONDS))
+
+        val reader = Thread {
+            TestGameBridge.snapshot()
+            snapshotEntered.countDown()
+        }
+        reader.start()
+
+        assertFalse(
+            snapshotEntered.await(50, TimeUnit.MILLISECONDS),
+            "A bridge snapshot must not observe state while an update holds the state lock"
+        )
+        writer.join(1_000)
+        assertTrue(snapshotEntered.await(1, TimeUnit.SECONDS))
+        reader.join(1_000)
     }
 }

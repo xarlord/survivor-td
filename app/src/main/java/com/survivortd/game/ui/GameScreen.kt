@@ -269,34 +269,39 @@ fun GameScreen(
         GameLoop(
             onUpdate = { dt ->
                 if (gameState.isPaused || gameState.isGameOver || isPaused) return@GameLoop
-                // Game feel first — returns effective dt (0 during hit-stop)
-                val effectiveDt = gameFeelSystem.update(dt)
-                if (effectiveDt <= 0f) return@GameLoop  // Hit-stop freeze
+                // Serialize the complete simulation tick with TestGameBridge snapshots.
+                // Without this, snapshots can observe entity arrays between cleanup
+                // and spawn operations and report a false zero-enemy state.
+                gameState.withSynchronizedAccess {
+                    // Game feel first — returns effective dt (0 during hit-stop)
+                    val effectiveDt = gameFeelSystem.update(dt)
+                    if (effectiveDt <= 0f) return@withSynchronizedAccess  // Hit-stop freeze
 
-                // [#21] Wave system FIRST — spawns enemies for other systems to process
-                waveSystem.update(effectiveDt)
-                // Sync build phase flag for TowerSystem + UI
-                towerSystem.isBuildPhase = waveSystem.isBuildPhase
-                // [#119] Hero passives (must run before movement/combat for berserker/scout/shielder)
-                heroPassiveSystem.applyPassive(hero, gameState, effectiveDt)
-                // System update order: AI → Movement → Status → Combat → Towers → Weapons → Projectiles → Pickups
-                enemyAiSystem.update(effectiveDt)
-                movementSystem.update(effectiveDt)
-                statusEffectSystem.update(effectiveDt)
-                combatSystem.update(effectiveDt)
-                // [#22] Tower system — auto-targets and fires at enemies
-                towerSystem.update(effectiveDt)
-                weaponSystem.update(effectiveDt)
-                projectileSystem.update(effectiveDt)
-                pickupSystem.update(effectiveDt)
-                // [#118] Sprite animation — advance frames after all movement/combat settled
-                spriteAnimationSystem.update(effectiveDt)
-                damageNumberSystem.update(effectiveDt)
-                // Particles always update (even during hit-stop for visual continuity)
-                particleSystem.update(dt)
-                gameState.elapsedSeconds += effectiveDt
-                val killed = gameState.cleanupDeadEntities()
-                repeat(killed) { waveSystem.onEnemyKilled() }
+                    // [#21] Wave system FIRST — spawns enemies for other systems to process
+                    waveSystem.update(effectiveDt)
+                    // Sync build phase flag for TowerSystem + UI
+                    towerSystem.isBuildPhase = waveSystem.isBuildPhase
+                    // [#119] Hero passives (must run before movement/combat for berserker/scout/shielder)
+                    heroPassiveSystem.applyPassive(hero, gameState, effectiveDt)
+                    // System update order: AI → Movement → Status → Combat → Towers → Weapons → Projectiles → Pickups
+                    enemyAiSystem.update(effectiveDt)
+                    movementSystem.update(effectiveDt)
+                    statusEffectSystem.update(effectiveDt)
+                    combatSystem.update(effectiveDt)
+                    // [#22] Tower system — auto-targets and fires at enemies
+                    towerSystem.update(effectiveDt)
+                    weaponSystem.update(effectiveDt)
+                    projectileSystem.update(effectiveDt)
+                    pickupSystem.update(effectiveDt)
+                    // [#118] Sprite animation — advance frames after all movement/combat settled
+                    spriteAnimationSystem.update(effectiveDt)
+                    damageNumberSystem.update(effectiveDt)
+                    // Particles always update (even during hit-stop for visual continuity)
+                    particleSystem.update(dt)
+                    gameState.elapsedSeconds += effectiveDt
+                    val killed = gameState.cleanupDeadEntities()
+                    repeat(killed) { waveSystem.onEnemyKilled() }
+                }
             },
             onRender = {
                 // [#23] Trigger Canvas redraw by bumping state on Main thread.

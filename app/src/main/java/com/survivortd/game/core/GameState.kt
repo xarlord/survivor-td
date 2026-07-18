@@ -15,6 +15,13 @@ import com.survivortd.game.utils.ObjectPool
  */
 class GameState {
 
+    /** Shared lock for game-loop mutations and diagnostic/test snapshots. */
+    val synchronizationLock = Any()
+
+    /** Run a state read or mutation under the shared game-state lock. */
+    inline fun <T> withSynchronizedAccess(block: () -> T): T =
+        synchronized(synchronizationLock, block)
+
     // === ENTITIES (flat arrays for performance) ===
     val positions = ArrayList<PositionComponent>(GameConfig.MAX_ENTITIES)
     val velocities = ArrayList<VelocityComponent>(GameConfig.MAX_ENTITIES)
