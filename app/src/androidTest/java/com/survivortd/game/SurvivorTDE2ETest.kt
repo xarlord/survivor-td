@@ -238,6 +238,15 @@ class SurvivorTDE2ETest {
             }
             assertTrue("TestGameBridge should be active after PLAY", TestGameBridge.isActive)
 
+            val timerBounds = composeRule.onNodeWithTag("hud_time")
+                .fetchSemanticsNode().boundsInRoot
+            val pauseBounds = composeRule.onNodeWithTag("pause_button")
+                .fetchSemanticsNode().boundsInRoot
+            assertTrue(
+                "Pause target must not overlap the survival timer",
+                !timerBounds.overlaps(pauseBounds)
+            )
+
             val state = TestGameBridge.rawState()!!
             state.withSynchronizedAccess {
                 state.elapsedSeconds = 300f
@@ -300,15 +309,41 @@ class SurvivorTDE2ETest {
                 TestGameBridge.snapshot()!!.towerCount
             )
 
-            val screenshot = context.filesDir.resolve("pr184_tower_minimap.png")
-            FileOutputStream(screenshot).use { output ->
+            assertEquals(
+                "Minimap must be hidden while build controls own the bottom touch region",
+                0,
+                composeRule.onAllNodesWithTag("minimap")
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
+            val buildScreenshot = context.filesDir.resolve("pr184_build_layout.png")
+            FileOutputStream(buildScreenshot).use { output ->
                 composeRule.onRoot().captureToImage().asAndroidBitmap().compress(
                     android.graphics.Bitmap.CompressFormat.PNG,
                     100,
                     output
                 )
             }
-            assertTrue("Evidence screenshot must be written", screenshot.isFile)
+            assertTrue("Build-layout evidence screenshot must be written", buildScreenshot.isFile)
+
+            state.withSynchronizedAccess {
+                state.isPaused = false
+                waveSystem.update(11f)
+                assertTrue("Build phase should end before minimap evidence", !waveSystem.isBuildPhase)
+                state.isPaused = true
+            }
+            composeRule.mainClock.advanceTimeBy(500L)
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("minimap").assertIsDisplayed()
+
+            val minimapScreenshot = context.filesDir.resolve("pr184_tower_minimap.png")
+            FileOutputStream(minimapScreenshot).use { output ->
+                composeRule.onRoot().captureToImage().asAndroidBitmap().compress(
+                    android.graphics.Bitmap.CompressFormat.PNG,
+                    100,
+                    output
+                )
+            }
+            assertTrue("Minimap evidence screenshot must be written", minimapScreenshot.isFile)
         } finally {
             composeRule.mainClock.autoAdvance = true
         }
