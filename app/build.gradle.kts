@@ -30,12 +30,17 @@ android {
         }
     }
 
+    val diagnosticsEnabled = providers.gradleProperty("survivorDiagnostics")
+        .map(String::toBoolean)
+        .getOrElse(false)
+
     defaultConfig {
         applicationId = "com.survivortd.game"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("boolean", "DIAGNOSTICS_ENABLED", diagnosticsEnabled.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -80,6 +85,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {

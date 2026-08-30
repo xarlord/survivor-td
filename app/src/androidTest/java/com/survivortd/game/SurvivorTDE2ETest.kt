@@ -90,10 +90,7 @@ class SurvivorTDE2ETest {
 
     @Test
     fun navigating_to_game_is_route_exclusive_with_paused_clock() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        runBlocking {
-            SaveManager.saveSettings(context, SaveManager.GameSettings(isFirstRun = true))
-        }
+        setFirstRunAndRecreateActivity(isFirstRun = true)
 
         composeRule.mainClock.autoAdvance = false
         try {
@@ -129,6 +126,24 @@ class SurvivorTDE2ETest {
                 "First-run tutorial must own the exclusive game route",
                 tutorial.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
             )
+            assertEquals(
+                "Tutorial modal must remove HUD from semantics",
+                0,
+                composeRule.onAllNodesWithTag("game_hud")
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
+            assertEquals(
+                "Tutorial modal must remove minimap from semantics",
+                0,
+                composeRule.onAllNodesWithTag("minimap")
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
+            assertEquals(
+                "Ordinary dev builds must not expose FPS telemetry",
+                0,
+                composeRule.onAllNodesWithTag("fps_telemetry")
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
 
             tutorial[0].performClick()
             composeRule.mainClock.advanceTimeBy(1000L)
@@ -157,10 +172,7 @@ class SurvivorTDE2ETest {
 
     @Test
     fun pending_level_up_waits_for_tutorial_and_opens_once_after_dismissal() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        runBlocking {
-            SaveManager.saveSettings(context, SaveManager.GameSettings(isFirstRun = true))
-        }
+        setFirstRunAndRecreateActivity(isFirstRun = true)
 
         composeRule.mainClock.autoAdvance = false
         try {
@@ -223,9 +235,7 @@ class SurvivorTDE2ETest {
     @Test
     fun build_placement_is_visible_in_world_and_minimap() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        runBlocking {
-            SaveManager.saveSettings(context, SaveManager.GameSettings(isFirstRun = false))
-        }
+        setFirstRunAndRecreateActivity(isFirstRun = false)
 
         composeRule.mainClock.autoAdvance = false
         try {
@@ -347,6 +357,18 @@ class SurvivorTDE2ETest {
         } finally {
             composeRule.mainClock.autoAdvance = true
         }
+    }
+
+    private fun setFirstRunAndRecreateActivity(isFirstRun: Boolean) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        runBlocking {
+            SaveManager.saveSettings(context, SaveManager.GameSettings(isFirstRun = isFirstRun))
+        }
+        // createAndroidComposeRule launches the Activity before each test body.
+        // Recreate it so MainActivity observes the persisted setup deterministically,
+        // independent of test execution order within the instrumentation process.
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
     }
 
     /**
