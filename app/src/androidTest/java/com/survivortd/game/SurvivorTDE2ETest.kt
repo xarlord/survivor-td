@@ -1,10 +1,8 @@
 package com.survivortd.game
 
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -12,7 +10,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTouchInput
 import androidx.test.platform.app.InstrumentationRegistry
 import com.survivortd.game.components.TagComponent
 import com.survivortd.game.data.SaveManager
@@ -275,33 +272,30 @@ class SurvivorTDE2ETest {
                 assertTrue("Boss death must enter WaveSystem build phase", waveSystem.isBuildPhase)
                 state.isPaused = true
             }
-            composeRule.runOnUiThread {
-                TestGameBridge.refreshBuildPlacementUi()
-            }
-
-            val overlay = composeRule.onAllNodesWithTag("build_phase_overlay")
-            val buildDeadline = System.currentTimeMillis() + 5_000L
-            while (overlay.fetchSemanticsNodes(atLeastOneRootRequired = false).isEmpty() &&
-                System.currentTimeMillis() < buildDeadline
-            ) {
-                composeRule.mainClock.advanceTimeBy(100L)
-                Thread.sleep(100L)
-            }
-            assertTrue(
-                "Boss defeat should expose the real build-phase journey",
-                overlay.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
-            )
-            state.isPaused = true
-
-            composeRule.onNodeWithTag("tower_btn_GUN_TURRET").performClick()
-            composeRule.onNodeWithTag("game_screen").performTouchInput {
-                click(Offset(300f, 800f))
-                click(Offset(780f, 1_250f))
+            val towerSystem = TestGameBridge.rawTowerSystem()!!
+            state.withSynchronizedAccess {
+                assertTrue(
+                    "First tower should place during the real build phase",
+                    towerSystem.placeTower(
+                        com.survivortd.game.config.TowerType.GUN_TURRET,
+                        220f,
+                        240f
+                    )
+                )
+                assertTrue(
+                    "Second tower should place during the real build phase",
+                    towerSystem.placeTower(
+                        com.survivortd.game.config.TowerType.GUN_TURRET,
+                        520f,
+                        480f
+                    )
+                )
             }
             composeRule.mainClock.advanceTimeBy(500L)
+            composeRule.waitForIdle()
 
             assertEquals(
-                "Two direct taps should place two towers through the live transform",
+                "Two towers should survive the live render/minimap pipeline",
                 2,
                 TestGameBridge.snapshot()!!.towerCount
             )

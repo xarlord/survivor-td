@@ -331,12 +331,7 @@ fun GameScreen(
             gameState,
             weaponSystem,
             towerSystem,
-            waveSystem,
-            refreshBuildPlacementUi = {
-                isBuildPhaseUi = waveSystem.isBuildPhase
-                buildPhaseSeconds = waveSystem.buildPhaseRemaining
-                hudScrap = gameState.players.getOrNull(gameState.playerIndex)?.scrap ?: 0
-            }
+            waveSystem
         )
         true
     }
