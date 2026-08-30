@@ -327,7 +327,12 @@ fun GameScreen(
 
     // [#35] Register TestGameBridge for E2E tests (debug builds only).
     remember {
-        com.survivortd.game.testing.TestGameBridge.register(gameState, weaponSystem, towerSystem)
+        com.survivortd.game.testing.TestGameBridge.register(
+            gameState,
+            weaponSystem,
+            towerSystem,
+            waveSystem
+        )
         true
     }
 

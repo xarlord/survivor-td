@@ -2,8 +2,9 @@ package com.survivortd.game.testing
 
 import com.survivortd.game.components.EnemyComponent
 import com.survivortd.game.core.GameState
-import com.survivortd.game.systems.WeaponSystem
 import com.survivortd.game.systems.TowerSystem
+import com.survivortd.game.systems.WaveSystem
+import com.survivortd.game.systems.WeaponSystem
 
 /**
  * Test bridge — allows E2E instrumentation tests to inspect the live [GameState]
@@ -40,6 +41,9 @@ object TestGameBridge {
     @Volatile
     private var _towerSystem: TowerSystem? = null
 
+    @Volatile
+    private var _waveSystem: WaveSystem? = null
+
     /**
      * Whether the bridge is active. Only true in debug builds after [register] is called.
      */
@@ -51,11 +55,13 @@ object TestGameBridge {
     fun register(
         gameState: GameState,
         weaponSystem: WeaponSystem? = null,
-        towerSystem: TowerSystem? = null
+        towerSystem: TowerSystem? = null,
+        waveSystem: WaveSystem? = null
     ) {
         _gameState = gameState
         _weaponSystem = weaponSystem
         _towerSystem = towerSystem
+        _waveSystem = waveSystem
     }
 
     /**
@@ -65,6 +71,7 @@ object TestGameBridge {
         _gameState = null
         _weaponSystem = null
         _towerSystem = null
+        _waveSystem = null
     }
 
     /**
@@ -113,6 +120,9 @@ object TestGameBridge {
      * the state is mutated on a background thread.
      */
     fun rawState(): GameState? = _gameState
+
+    /** Debug-only deterministic access for real boss-to-build instrumentation. */
+    fun rawWaveSystem(): WaveSystem? = _waveSystem
 
     /**
      * Immutable snapshot of game state at a point in time.
