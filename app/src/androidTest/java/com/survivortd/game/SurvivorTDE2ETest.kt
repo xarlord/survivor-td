@@ -272,7 +272,11 @@ class SurvivorTDE2ETest {
                     }
                 }
                 waveSystem.update(0.016f)
+                assertTrue("Boss death must enter WaveSystem build phase", waveSystem.isBuildPhase)
                 state.isPaused = true
+            }
+            composeRule.runOnUiThread {
+                TestGameBridge.refreshBuildPlacementUi()
             }
 
             val overlay = composeRule.onAllNodesWithTag("build_phase_overlay")
