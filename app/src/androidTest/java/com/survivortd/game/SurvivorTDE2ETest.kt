@@ -129,6 +129,24 @@ class SurvivorTDE2ETest {
                 "First-run tutorial must own the exclusive game route",
                 tutorial.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
             )
+            assertEquals(
+                "Tutorial modal must remove HUD from semantics",
+                0,
+                composeRule.onAllNodesWithTag("game_hud")
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
+            assertEquals(
+                "Tutorial modal must remove minimap from semantics",
+                0,
+                composeRule.onAllNodesWithTag("minimap")
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
+            assertEquals(
+                "Ordinary dev builds must not expose FPS telemetry",
+                0,
+                composeRule.onAllNodesWithTag("fps_telemetry")
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
 
             tutorial[0].performClick()
             composeRule.mainClock.advanceTimeBy(1000L)

@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.survivortd.game.BuildConfig
 import com.survivortd.game.components.RenderComponent
 import com.survivortd.game.components.TagComponent
 import com.survivortd.game.config.GameConfig
@@ -211,15 +212,17 @@ fun GameScreen(
 
     // FPS counter: count actual Canvas redraws per second via redrawTrigger changes.
     // We sample every second from the main coroutine — avoids off-thread complexity.
-    LaunchedEffect(Unit) {
-        var prevTrigger = 0
-        while (true) {
-            kotlinx.coroutines.delay(1000)
-            val current = redrawTrigger
-            hudFps = (current - prevTrigger).coerceAtLeast(0)
-            prevTrigger = current
-            if (hudFps > 0) {
-                android.util.Log.d("SurvivorTD-FPS", "FPS=$hudFps")
+    if (BuildConfig.DIAGNOSTICS_ENABLED) {
+        LaunchedEffect(Unit) {
+            var prevTrigger = 0
+            while (true) {
+                kotlinx.coroutines.delay(1000)
+                val current = redrawTrigger
+                hudFps = (current - prevTrigger).coerceAtLeast(0)
+                prevTrigger = current
+                if (hudFps > 0) {
+                    android.util.Log.d("SurvivorTD-FPS", "FPS=$hudFps")
+                }
             }
         }
     }
@@ -440,6 +443,17 @@ fun GameScreen(
     }
 
     Box(modifier = modifier.fillMaxSize().testTag("game_screen")) {
+        val presentation = resolveGameScreenPresentation(
+            tutorialVisible = showTutorial,
+            runSummaryVisible = showRunSummary,
+            pauseVisible = isPaused && !showRunSummary,
+            levelUpVisible = levelUpChoices.isNotEmpty(),
+            waveAnnouncementEligible = gameState.waveAnnouncementTimer > 0f &&
+                gameState.waveAnnouncementText.isNotEmpty(),
+            buildControlsEligible = isBuildPhaseUi,
+            minimapEligible = !isBuildPhaseUi,
+            diagnosticsEnabled = BuildConfig.DIAGNOSTICS_ENABLED
+        )
         val visibleWorldTransform = if (gameCanvasSize != IntSize.Zero) {
             VisibleWorldTransform(
                 canvasWidth = gameCanvasSize.width.toFloat(),
@@ -480,7 +494,7 @@ fun GameScreen(
         )
 
         // === LAYER 2: HUD Overlay ===
-        GameHUD(
+        if (presentation.showHud) GameHUD(
             hp = hudHp,
             xp = hudXp,
             level = hudLevel,
@@ -490,7 +504,7 @@ fun GameScreen(
             scrap = hudScrap,
             weaponCount = hudWeapons,
             towerCount = hudTowers,
-            fps = hudFps,
+            fps = if (presentation.showFpsTelemetry) hudFps else 0,
             wave = hudWave,
             waveText = hudWaveText,
             onPause = { isPaused = true },
@@ -500,7 +514,7 @@ fun GameScreen(
         )
 
         // [#97] Wave Announcement Overlay
-        if (gameState.waveAnnouncementTimer > 0f && gameState.waveAnnouncementText.isNotEmpty()) {
+        if (presentation.showWaveAnnouncement) {
             val isBoss = gameState.waveAnnouncementText.contains("BOSS")
             Box(
                 modifier = Modifier
@@ -519,7 +533,7 @@ fun GameScreen(
         }
 
         // === LAYER 2b: Build Phase Overlay (#147) ===
-        if (isBuildPhaseUi) {
+        if (presentation.showBuildControls) {
             BuildPhaseOverlay(
                 scrap = hudScrap,
                 towersPlaced = towerSystem.towers.size,
@@ -533,8 +547,8 @@ fun GameScreen(
             )
         }
 
-        // === LAYER 3: Level-Up Dialog (non-blocking, game continues) ===
-        if (levelUpChoices.isNotEmpty()) {
+        // === Modal candidate: Level-Up Dialog (simulation/input already blocked) ===
+        if (presentation.topmostModal == GameModalLayer.LEVEL_UP) {
             LevelUpDialog(
                 level = hudLevel,
                 choices = levelUpChoices,
@@ -573,8 +587,8 @@ fun GameScreen(
             )
         }
 
-        // === LAYER 5: Pause Overlay (#94) ===
-        if (isPaused && !showRunSummary) {
+        // === Modal candidate: Pause Overlay (#94) ===
+        if (presentation.topmostModal == GameModalLayer.PAUSE) {
             PauseOverlay(
                 onResume = { isPaused = false },
                 onQuit = {
@@ -584,8 +598,8 @@ fun GameScreen(
             )
         }
 
-        // === LAYER 6: Run Summary / Death Screen (#89) ===
-        if (showRunSummary) {
+        // === Modal candidate: Run Summary / Death Screen (#89) ===
+        if (presentation.topmostModal == GameModalLayer.RUN_SUMMARY) {
             RunSummaryScreen(
                 kills = summaryKills,
                 gold = summaryGold,
@@ -617,8 +631,8 @@ fun GameScreen(
             )
         }
 
-        // === LAYER 7: Minimap (#98) ===
-        if (!isBuildPhaseUi) visibleWorldTransform?.let { transform ->
+        // === Gameplay chrome: Minimap (#98) ===
+        if (presentation.showMinimap) visibleWorldTransform?.let { transform ->
             MinimapView(
                 gameState = gameState,
                 towerSystem = towerSystem,
@@ -632,8 +646,8 @@ fun GameScreen(
             )
         }
 
-        // === LAYER 8: Tutorial Overlay (#95) ===
-        if (showTutorial) {
+        // === Highest-priority modal candidate: Tutorial Overlay (#95) ===
+        if (presentation.topmostModal == GameModalLayer.TUTORIAL) {
             val rememberScope = rememberCoroutineScope()
             TutorialOverlay(onDismiss = {
                 inputController.dismissTutorial()
@@ -1401,6 +1415,7 @@ private fun GameHUD(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .testTag("game_hud")
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -1456,7 +1471,8 @@ private fun GameHUD(
                         Text(
                             "${fps}fps",
                             color = com.survivortd.game.ui.theme.StdColors.TextMuted,
-                            fontSize = 9.sp
+                            fontSize = 9.sp,
+                            modifier = Modifier.testTag("fps_telemetry")
                         )
                     }
                 }
