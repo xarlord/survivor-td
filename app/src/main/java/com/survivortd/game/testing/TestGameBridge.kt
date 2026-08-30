@@ -2,6 +2,8 @@ package com.survivortd.game.testing
 
 import com.survivortd.game.components.EnemyComponent
 import com.survivortd.game.core.GameState
+import com.survivortd.game.systems.TowerSystem
+import com.survivortd.game.systems.WaveSystem
 import com.survivortd.game.systems.WeaponSystem
 
 /**
@@ -36,6 +38,12 @@ object TestGameBridge {
     @Volatile
     private var _weaponSystem: WeaponSystem? = null
 
+    @Volatile
+    private var _towerSystem: TowerSystem? = null
+
+    @Volatile
+    private var _waveSystem: WaveSystem? = null
+
     /**
      * Whether the bridge is active. Only true in debug builds after [register] is called.
      */
@@ -44,9 +52,16 @@ object TestGameBridge {
     /**
      * Register the live game state. Called from GameScreen on debug builds.
      */
-    fun register(gameState: GameState, weaponSystem: WeaponSystem? = null) {
+    fun register(
+        gameState: GameState,
+        weaponSystem: WeaponSystem? = null,
+        towerSystem: TowerSystem? = null,
+        waveSystem: WaveSystem? = null
+    ) {
         _gameState = gameState
         _weaponSystem = weaponSystem
+        _towerSystem = towerSystem
+        _waveSystem = waveSystem
     }
 
     /**
@@ -55,6 +70,8 @@ object TestGameBridge {
     fun unregister() {
         _gameState = null
         _weaponSystem = null
+        _towerSystem = null
+        _waveSystem = null
     }
 
     /**
@@ -92,7 +109,8 @@ object TestGameBridge {
                 enemyCount = enemyCount,
                 elapsedTime = state.elapsedSeconds,
                 score = state.score,
-                weaponCount = _weaponSystem?.weapons?.size ?: 0
+                weaponCount = _weaponSystem?.weapons?.size ?: 0,
+                towerCount = _towerSystem?.towers?.size ?: 0
             )
         }
     }
@@ -102,6 +120,12 @@ object TestGameBridge {
      * the state is mutated on a background thread.
      */
     fun rawState(): GameState? = _gameState
+
+    /** Debug-only deterministic access for real boss-to-build instrumentation. */
+    fun rawWaveSystem(): WaveSystem? = _waveSystem
+
+    /** Debug-only deterministic access for real tower render instrumentation. */
+    fun rawTowerSystem(): TowerSystem? = _towerSystem
 
     /**
      * Immutable snapshot of game state at a point in time.
@@ -117,6 +141,7 @@ object TestGameBridge {
         val enemyCount: Int,
         val elapsedTime: Float,
         val score: Long,
-        val weaponCount: Int
+        val weaponCount: Int,
+        val towerCount: Int
     )
 }

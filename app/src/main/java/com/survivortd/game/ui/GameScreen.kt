@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.setValue
@@ -43,13 +44,18 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.components.RenderComponent
@@ -199,6 +205,7 @@ fun GameScreen(
     // background thread; we bump this on the Main dispatcher to trigger redraw.
     // Using Choreographer for VSYNC-aligned updates (no flooding main thread).
     var redrawTrigger by remember { mutableIntStateOf(0) }
+    var gameCanvasSize by remember { mutableStateOf(IntSize.Zero) }
     val renderHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     val renderPending = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
 
@@ -320,7 +327,12 @@ fun GameScreen(
 
     // [#35] Register TestGameBridge for E2E tests (debug builds only).
     remember {
-        com.survivortd.game.testing.TestGameBridge.register(gameState, weaponSystem)
+        com.survivortd.game.testing.TestGameBridge.register(
+            gameState,
+            weaponSystem,
+            towerSystem,
+            waveSystem
+        )
         true
     }
 
@@ -428,6 +440,20 @@ fun GameScreen(
     }
 
     Box(modifier = modifier.fillMaxSize().testTag("game_screen")) {
+        val visibleWorldTransform = if (gameCanvasSize != IntSize.Zero) {
+            VisibleWorldTransform(
+                canvasWidth = gameCanvasSize.width.toFloat(),
+                canvasHeight = gameCanvasSize.height.toFloat(),
+                worldHeight = GameConfig.WORLD_HEIGHT,
+                cameraX = gameState.cameraX,
+                cameraY = gameState.cameraY,
+                shakeX = gameFeelSystem.shakeOffsetX,
+                shakeY = gameFeelSystem.shakeOffsetY
+            )
+        } else {
+            null
+        }
+
         // === LAYER 1: Game Canvas + Touch Input ===
         GameCanvasView(
             gameState = gameState,
@@ -443,6 +469,8 @@ fun GameScreen(
             onJoystickAnchorChange = { joystickAnchor = it },
             onJoystickKnobChange = { joystickKnob = it },
             redrawTrigger = redrawTrigger,
+            visibleWorldTransform = visibleWorldTransform,
+            onCanvasSizeChanged = { gameCanvasSize = it },
             buildPhaseActive = isBuildPhaseUi,
             selectedTower = selectedTower,
             onPlaceTower = { type, wx, wy ->
@@ -465,6 +493,7 @@ fun GameScreen(
             fps = hudFps,
             wave = hudWave,
             waveText = hudWaveText,
+            onPause = { isPaused = true },
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
@@ -544,24 +573,6 @@ fun GameScreen(
             )
         }
 
-        // === LAYER 4: Pause Button (#94) ===
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 16.dp, end = 16.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF333A4D))
-                .testTag("pause_button")
-        ) {
-            Text(
-                text = "⏸",
-                fontSize = 20.sp,
-                modifier = Modifier
-                    .clickable { isPaused = true }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            )
-        }
-
         // === LAYER 5: Pause Overlay (#94) ===
         if (isPaused && !showRunSummary) {
             PauseOverlay(
@@ -607,15 +618,19 @@ fun GameScreen(
         }
 
         // === LAYER 7: Minimap (#98) ===
-        MinimapView(
-            gameState = gameState,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(
-                    end = GameConfig.MINIMAP_MARGIN_DP.dp,
-                    bottom = GameConfig.MINIMAP_MARGIN_DP.dp
-                )
-        )
+        if (!isBuildPhaseUi) visibleWorldTransform?.let { transform ->
+            MinimapView(
+                gameState = gameState,
+                towerSystem = towerSystem,
+                visibleWorldTransform = transform,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = GameConfig.MINIMAP_MARGIN_DP.dp,
+                        bottom = GameConfig.MINIMAP_MARGIN_DP.dp
+                    )
+            )
+        }
 
         // === LAYER 8: Tutorial Overlay (#95) ===
         if (showTutorial) {
@@ -726,6 +741,8 @@ private fun GameCanvasView(
     onJoystickAnchorChange: (Offset) -> Unit,
     onJoystickKnobChange: (Offset) -> Unit,
     redrawTrigger: Int,
+    visibleWorldTransform: VisibleWorldTransform?,
+    onCanvasSizeChanged: (IntSize) -> Unit,
     buildPhaseActive: Boolean = false,
     selectedTower: com.survivortd.game.config.TowerType? = null,
     onPlaceTower: (com.survivortd.game.config.TowerType, Float, Float) -> Unit = { _, _, _ -> },
@@ -734,11 +751,13 @@ private fun GameCanvasView(
     // [#23] Read redrawTrigger so Compose knows to recompose when it changes
     @Suppress("UNUSED_VARIABLE")
     val trigger = redrawTrigger
+    val currentVisibleWorldTransform by rememberUpdatedState(visibleWorldTransform)
 
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF0A0E1A))
+            .onSizeChanged(onCanvasSizeChanged)
             .pointerInput(inputController, buildPhaseActive, selectedTower) {
                 // Density-aware stick radius (#162)
                 val radius = minOf(size.width, size.height) * VirtualJoystick.RADIUS_SCREEN_FRACTION
@@ -763,15 +782,13 @@ private fun GameCanvasView(
                                     if (buildPhaseActive && selectedTower != null &&
                                         change.pressed && change.previousPressed.not()
                                     ) {
-                                        val camX = if (gameState.playerIndex >= 0)
-                                            gameState.positions[gameState.playerIndex].x
-                                        else GameConfig.WORLD_WIDTH / 2f
-                                        val camY = if (gameState.playerIndex >= 0)
-                                            gameState.positions[gameState.playerIndex].y
-                                        else GameConfig.WORLD_HEIGHT / 2f
+                                        val placementTransform = currentVisibleWorldTransform
+                                        if (placementTransform == null) {
+                                            change.consume()
+                                            continue
+                                        }
                                         val (wx, wy) = BuildPlacement.screenToWorld(
-                                            pos.x, pos.y, size.width.toFloat(), size.height.toFloat(),
-                                            camX, camY
+                                            pos.x, pos.y, placementTransform
                                         )
                                         onPlaceTower(selectedTower, wx, wy)
                                         change.consume()
@@ -814,32 +831,31 @@ private fun GameCanvasView(
                     }
                 }
     ) {
-        // Viewport: scale world to fill full screen height, center on player
-        val scale = size.height / GameConfig.WORLD_HEIGHT
-        // Camera offset: center the player on screen + screen shake.
-        // screenX = worldX * scale + camX. For player at cameraX: screenX = cameraX*scale + camX = width/2.
-        val camX = size.width / 2f - gameState.cameraX * scale + gameFeelSystem.shakeOffsetX * scale
-        val camY = size.height / 2f - gameState.cameraY * scale + gameFeelSystem.shakeOffsetY * scale
-
-        // (#115) Frustum culler — compute world-space view bounds for off-screen skip
-        val culler = FrustumCuller().apply {
-            margin = 100f / scale  // margin in world units
-            update(
-                camX = gameState.cameraX - (size.width / scale) / 2f,
-                camY = gameState.cameraY - (size.height / scale) / 2f,
-                viewWidth = size.width / scale,
-                viewHeight = size.height / scale
-            )
-        }
+        // The exact same per-frame transform instance also drives the minimap.
+        val transform = visibleWorldTransform ?: return@Canvas
+        val culler = createGameCanvasFrustumCuller(
+            transform = transform,
+            screenMargin = 100f
+        )
 
         // World→screen coordinate conversion (replaces broken withTransform).
         // withTransform produces no visible output on some devices/emulators,
         // so we pass screen-space coordinates directly to all draw calls.
-        val toScreenX: (Float) -> Float = { wx -> wx * scale + camX }
-        val toScreenY: (Float) -> Float = { wy -> wy * scale + camY }
-        val toScreenR: (Float) -> Float = { wr -> wr * scale }
+        val toScreenX: (Float) -> Float = transform::worldToScreenX
+        val toScreenY: (Float) -> Float = transform::worldToScreenY
+        val toScreenR: (Float) -> Float = { worldRadius -> worldRadius * transform.scale }
+        val camX = transform.worldToScreenX(0f)
+        val camY = transform.worldToScreenY(0f)
 
-        drawGameBackground(gameState, toScreenX, toScreenY, toScreenR, scale, camX, camY)
+        drawGameBackground(
+            gameState,
+            toScreenX,
+            toScreenY,
+            toScreenR,
+            transform.scale,
+            camX,
+            camY
+        )
         drawEntities(gameState, culler, toScreenX, toScreenY, toScreenR)
         drawParticles(particleSystem, culler, toScreenX, toScreenY, toScreenR)
         drawTowers(towerSystem, culler, toScreenX, toScreenY, toScreenR)
@@ -1379,6 +1395,7 @@ private fun GameHUD(
     fps: Int = 0,
     wave: Int = 0,
     waveText: String = "",
+    onPause: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -1476,8 +1493,21 @@ private fun GameHUD(
             HudStatChip(
                 label = "TIME",
                 value = "$mins:${secs.toString().padStart(2, '0')}",
-                color = com.survivortd.game.ui.theme.StdColors.TextPrimary
+                color = com.survivortd.game.ui.theme.StdColors.TextPrimary,
+                modifier = Modifier.testTag("hud_time")
             )
+            Spacer(modifier = Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF333A4D))
+                    .clickable(onClick = onPause)
+                    .testTag("pause_button"),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = "⏸", fontSize = 20.sp)
+            }
         }
 
         Spacer(modifier = Modifier.height(6.dp))
@@ -1846,73 +1876,100 @@ private fun StatRow(label: String, value: String) {
 @Composable
 private fun MinimapView(
     gameState: GameState,
+    towerSystem: com.survivortd.game.systems.TowerSystem,
+    visibleWorldTransform: VisibleWorldTransform,
     modifier: Modifier = Modifier
 ) {
     Canvas(
         modifier = modifier
             .size(GameConfig.MINIMAP_SIZE_DP.dp)
+            .testTag("minimap")
     ) {
-        val worldW = GameConfig.WORLD_WIDTH
-        val worldH = GameConfig.WORLD_HEIGHT
         val mapSize = size.width
-        val scaleX = mapSize / worldW
-        val scaleY = mapSize / worldH
-        val scale = minOf(scaleX, scaleY)
-        val offsetX = (mapSize - worldW * scale) / 2f
-        val offsetY = (mapSize - worldH * scale) / 2f
+        val projection = MinimapProjection(
+            minimapSize = mapSize,
+            worldWidth = GameConfig.WORLD_WIDTH,
+            worldHeight = GameConfig.WORLD_HEIGHT
+        )
+        val viewport = projection.map(visibleWorldTransform.visibleWorldBounds())
+        val clipCircle = projection.circularClip
+        val circularClip = Path().apply {
+            addOval(
+                Rect(
+                    left = clipCircle.centerX - clipCircle.radius,
+                    top = clipCircle.centerY - clipCircle.radius,
+                    right = clipCircle.centerX + clipCircle.radius,
+                    bottom = clipCircle.centerY + clipCircle.radius
+                )
+            )
+        }
 
-        // Background
         drawCircle(
             color = Color(0xFF0A0E1A).copy(alpha = GameConfig.MINIMAP_ALPHA),
             radius = mapSize / 2f,
             center = center
         )
-        // Border
+
+        // Keep both entity dots and the aspect-sensitive viewport inside the circle.
+        drawContext.canvas.save()
+        try {
+            clipPath(circularClip) {
+                val positions = gameState.positions
+                val healths = gameState.healths
+                val tags = gameState.tags
+                val renders = gameState.renders
+
+                for (i in positions.indices) {
+                    if (i >= healths.size || healths[i].isDead) continue
+                    if (i >= tags.size) continue
+
+                    val x = projection.mapX(positions[i].x)
+                    val y = projection.mapY(positions[i].y)
+                    val color = when (tags[i].tag) {
+                        TagComponent.EntityTag.PLAYER -> Color(0xFF42A5F5)
+                        TagComponent.EntityTag.ENEMY -> {
+                            // Boss check: large radius
+                            val isBoss = i < renders.size && renders[i].radius > 30f
+                            if (isBoss) Color(0xFFFFD700) else Color(0xFFFF1744)
+                        }
+                        TagComponent.EntityTag.TOWER -> Color(0xFF00E676)
+                        else -> continue
+                    }
+                    drawCircle(
+                        color = color,
+                        radius = GameConfig.MINIMAP_DOT_RADIUS,
+                        center = Offset(x, y)
+                    )
+                }
+
+                val towerMarkers = projection.projectTowerMarkers(
+                    towerSystem.towers.toList().map { tower ->
+                        WorldPoint(x = tower.x, y = tower.y)
+                    }
+                )
+                for (marker in towerMarkers) {
+                    drawCircle(
+                        color = Color(0xFF00E676),
+                        radius = GameConfig.MINIMAP_DOT_RADIUS,
+                        center = Offset(marker.x, marker.y)
+                    )
+                }
+
+                drawRect(
+                    color = Color.White.copy(alpha = GameConfig.MINIMAP_VIEWPORT_ALPHA),
+                    topLeft = Offset(viewport.left, viewport.top),
+                    size = Size(viewport.width, viewport.height)
+                )
+            }
+        } finally {
+            drawContext.canvas.restore()
+        }
+
         drawCircle(
             color = Color(0xFF333A4D),
             radius = mapSize / 2f,
             center = center,
             style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
-        )
-
-        // Entity dots
-        val positions = gameState.positions
-        val healths = gameState.healths
-        val tags = gameState.tags
-        val renders = gameState.renders
-
-        for (i in positions.indices) {
-            if (i >= healths.size || healths[i].isDead) continue
-            if (i >= tags.size) continue
-
-            val x = positions[i].x * scale + offsetX
-            val y = positions[i].y * scale + offsetY
-            val color = when (tags[i].tag) {
-                TagComponent.EntityTag.PLAYER -> Color(0xFF42A5F5)
-                TagComponent.EntityTag.ENEMY -> {
-                    // Boss check: large radius
-                    val isBoss = i < renders.size && renders[i].radius > 30f
-                    if (isBoss) Color(0xFFFFD700) else Color(0xFFFF1744)
-                }
-                TagComponent.EntityTag.TOWER -> Color(0xFF00E676)
-                else -> continue
-            }
-            drawCircle(
-                color = color,
-                radius = GameConfig.MINIMAP_DOT_RADIUS,
-                center = Offset(x, y)
-            )
-        }
-
-        // Viewport rectangle (camera area)
-        val camX = gameState.cameraX * scale + offsetX
-        val camY = gameState.cameraY * scale + offsetY
-        val vpW = GameConfig.CAMERA_WIDTH * scale
-        val vpH = GameConfig.CAMERA_HEIGHT * scale
-        drawRect(
-            color = Color.White.copy(alpha = GameConfig.MINIMAP_VIEWPORT_ALPHA),
-            topLeft = Offset(camX - vpW / 2f, camY - vpH / 2f),
-            size = androidx.compose.ui.geometry.Size(vpW, vpH)
         )
     }
 }

@@ -1,15 +1,20 @@
 package com.survivortd.game
 
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
+import com.survivortd.game.components.TagComponent
 import com.survivortd.game.data.SaveManager
 import com.survivortd.game.testing.TestGameBridge
+import java.io.FileOutputStream
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -210,6 +215,135 @@ class SurvivorTDE2ETest {
                 TestGameBridge.snapshot()!!.elapsedTime,
                 0.001f
             )
+        } finally {
+            composeRule.mainClock.autoAdvance = true
+        }
+    }
+
+    @Test
+    fun build_placement_is_visible_in_world_and_minimap() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        runBlocking {
+            SaveManager.saveSettings(context, SaveManager.GameSettings(isFirstRun = false))
+        }
+
+        composeRule.mainClock.autoAdvance = false
+        try {
+            composeRule.onNodeWithTag("play_button").performClick()
+            composeRule.mainClock.advanceTimeBy(1000L)
+
+            val bridgeDeadline = System.currentTimeMillis() + 10_000L
+            while (!TestGameBridge.isActive && System.currentTimeMillis() < bridgeDeadline) {
+                Thread.sleep(100L)
+            }
+            assertTrue("TestGameBridge should be active after PLAY", TestGameBridge.isActive)
+
+            val timerBounds = composeRule.onNodeWithTag("hud_time")
+                .fetchSemanticsNode().boundsInRoot
+            val pauseBounds = composeRule.onNodeWithTag("pause_button")
+                .fetchSemanticsNode().boundsInRoot
+            assertTrue(
+                "Pause target must not overlap the survival timer",
+                !timerBounds.overlaps(pauseBounds)
+            )
+
+            val state = TestGameBridge.rawState()!!
+            state.withSynchronizedAccess {
+                state.elapsedSeconds = 300f
+                state.players[state.playerIndex].scrap = 1_000
+                state.healths[state.playerIndex].apply {
+                    maxHp = 100_000f
+                    currentHp = 100_000f
+                }
+            }
+
+            val waveSystem = TestGameBridge.rawWaveSystem()!!
+            state.withSynchronizedAccess {
+                state.currentWave = 4
+                waveSystem.startNextWave()
+            }
+            val hasBoss = state.withSynchronizedAccess {
+                state.enemies.indices.any { index ->
+                    state.tags.getOrNull(index)?.tag == TagComponent.EntityTag.ENEMY &&
+                        state.enemies[index].type ==
+                        com.survivortd.game.components.EnemyComponent.EnemyData.BOSS
+                }
+            }
+            assertTrue("The deterministic gate must enter a real boss wave", hasBoss)
+
+            state.withSynchronizedAccess {
+                state.enemies.indices.forEach { index ->
+                    if (state.tags.getOrNull(index)?.tag == TagComponent.EntityTag.ENEMY) {
+                        state.healths[index].currentHp = 0f
+                    }
+                }
+                waveSystem.update(0.016f)
+                assertTrue("Boss death must enter WaveSystem build phase", waveSystem.isBuildPhase)
+                state.isPaused = true
+            }
+            val towerSystem = TestGameBridge.rawTowerSystem()!!
+            state.withSynchronizedAccess {
+                assertTrue(
+                    "First tower should place during the real build phase",
+                    towerSystem.placeTower(
+                        com.survivortd.game.config.TowerType.GUN_TURRET,
+                        220f,
+                        240f
+                    )
+                )
+                assertTrue(
+                    "Second tower should place during the real build phase",
+                    towerSystem.placeTower(
+                        com.survivortd.game.config.TowerType.GUN_TURRET,
+                        520f,
+                        480f
+                    )
+                )
+            }
+            composeRule.mainClock.advanceTimeBy(500L)
+            composeRule.waitForIdle()
+
+            assertEquals(
+                "Two towers should survive the live render/minimap pipeline",
+                2,
+                TestGameBridge.snapshot()!!.towerCount
+            )
+
+            assertEquals(
+                "Minimap must be hidden while build controls own the bottom touch region",
+                0,
+                composeRule.onAllNodesWithTag("minimap")
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
+            val buildScreenshot = context.filesDir.resolve("pr184_build_layout.png")
+            FileOutputStream(buildScreenshot).use { output ->
+                composeRule.onRoot().captureToImage().asAndroidBitmap().compress(
+                    android.graphics.Bitmap.CompressFormat.PNG,
+                    100,
+                    output
+                )
+            }
+            assertTrue("Build-layout evidence screenshot must be written", buildScreenshot.isFile)
+
+            state.withSynchronizedAccess {
+                state.isPaused = false
+                waveSystem.update(11f)
+                assertTrue("Build phase should end before minimap evidence", !waveSystem.isBuildPhase)
+                state.isPaused = true
+            }
+            composeRule.mainClock.advanceTimeBy(500L)
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("minimap").assertIsDisplayed()
+
+            val minimapScreenshot = context.filesDir.resolve("pr184_tower_minimap.png")
+            FileOutputStream(minimapScreenshot).use { output ->
+                composeRule.onRoot().captureToImage().asAndroidBitmap().compress(
+                    android.graphics.Bitmap.CompressFormat.PNG,
+                    100,
+                    output
+                )
+            }
+            assertTrue("Minimap evidence screenshot must be written", minimapScreenshot.isFile)
         } finally {
             composeRule.mainClock.autoAdvance = true
         }
