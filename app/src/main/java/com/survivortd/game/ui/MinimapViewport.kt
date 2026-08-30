@@ -26,6 +26,14 @@ internal class MinimapProjection(
 
     fun mapY(worldY: Float): Float = worldY * scale + offsetY
 
+    fun projectTowerMarkers(towers: List<WorldPoint>): List<MinimapPoint> =
+        towers.map { tower ->
+            MinimapPoint(
+                x = mapX(tower.x),
+                y = mapY(tower.y)
+            )
+        }
+
     /** Maps the exact world bounds represented by the game canvas transform. */
     fun map(bounds: VisibleWorldBounds): MinimapViewport = MinimapViewport(
         left = mapX(bounds.left),
@@ -34,6 +42,10 @@ internal class MinimapProjection(
         bottom = mapY(bounds.bottom)
     )
 }
+
+internal data class WorldPoint(val x: Float, val y: Float)
+
+internal data class MinimapPoint(val x: Float, val y: Float)
 
 /** Minimap-space camera viewport rectangle. */
 internal data class MinimapViewport(

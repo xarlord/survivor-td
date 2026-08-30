@@ -633,6 +633,7 @@ fun GameScreen(
         visibleWorldTransform?.let { transform ->
             MinimapView(
                 gameState = gameState,
+                towerSystem = towerSystem,
                 visibleWorldTransform = transform,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -1873,6 +1874,7 @@ private fun StatRow(label: String, value: String) {
 @Composable
 private fun MinimapView(
     gameState: GameState,
+    towerSystem: com.survivortd.game.systems.TowerSystem,
     visibleWorldTransform: VisibleWorldTransform,
     modifier: Modifier = Modifier
 ) {
@@ -1934,6 +1936,19 @@ private fun MinimapView(
                         color = color,
                         radius = GameConfig.MINIMAP_DOT_RADIUS,
                         center = Offset(x, y)
+                    )
+                }
+
+                val towerMarkers = projection.projectTowerMarkers(
+                    towerSystem.towers.toList().map { tower ->
+                        WorldPoint(x = tower.x, y = tower.y)
+                    }
+                )
+                for (marker in towerMarkers) {
+                    drawCircle(
+                        color = Color(0xFF00E676),
+                        radius = GameConfig.MINIMAP_DOT_RADIUS,
+                        center = Offset(marker.x, marker.y)
                     )
                 }
 
