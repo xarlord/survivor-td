@@ -1260,10 +1260,21 @@ private fun DrawScope.drawDamageNumbers(
             } else {
                 dn.value.toInt().toString()
             }
+            val fontMetrics = paint.fontMetrics
+            val fittedPosition = fitDamageNumberToCanvas(
+                anchorX = toScreenX(dn.x),
+                baselineY = toScreenY(dn.y),
+                textWidth = paint.measureText(text),
+                fontTop = fontMetrics.top,
+                fontBottom = fontMetrics.bottom,
+                canvasWidth = size.width,
+                canvasHeight = size.height,
+                edgePadding = 1f
+            ) ?: continue
             canvas.nativeCanvas.drawText(
                 text,
-                toScreenX(dn.x),
-                toScreenY(dn.y),
+                fittedPosition.x,
+                fittedPosition.baselineY,
                 paint
             )
         }
