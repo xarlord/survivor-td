@@ -251,24 +251,28 @@ class SurvivorTDE2ETest {
                 }
             }
 
-            val bossDeadline = System.currentTimeMillis() + 5_000L
-            while (System.currentTimeMillis() < bossDeadline) {
-                val hasBoss = state.withSynchronizedAccess {
-                    state.enemies.indices.any { index ->
-                        state.tags.getOrNull(index)?.tag == TagComponent.EntityTag.ENEMY &&
-                            state.enemies[index].type ==
-                            com.survivortd.game.components.EnemyComponent.EnemyData.BOSS
-                    }
-                }
-                if (hasBoss) break
-                Thread.sleep(100L)
+            val waveSystem = TestGameBridge.rawWaveSystem()!!
+            state.withSynchronizedAccess {
+                state.currentWave = 4
+                waveSystem.startNextWave()
             }
+            val hasBoss = state.withSynchronizedAccess {
+                state.enemies.indices.any { index ->
+                    state.tags.getOrNull(index)?.tag == TagComponent.EntityTag.ENEMY &&
+                        state.enemies[index].type ==
+                        com.survivortd.game.components.EnemyComponent.EnemyData.BOSS
+                }
+            }
+            assertTrue("The deterministic gate must enter a real boss wave", hasBoss)
+
             state.withSynchronizedAccess {
                 state.enemies.indices.forEach { index ->
                     if (state.tags.getOrNull(index)?.tag == TagComponent.EntityTag.ENEMY) {
                         state.healths[index].currentHp = 0f
                     }
                 }
+                waveSystem.update(0.016f)
+                state.isPaused = true
             }
 
             val overlay = composeRule.onAllNodesWithTag("build_phase_overlay")
