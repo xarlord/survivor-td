@@ -44,6 +44,9 @@ object TestGameBridge {
     @Volatile
     private var _waveSystem: WaveSystem? = null
 
+    @Volatile
+    private var _refreshBuildPlacementUi: (() -> Unit)? = null
+
     /**
      * Whether the bridge is active. Only true in debug builds after [register] is called.
      */
@@ -56,12 +59,14 @@ object TestGameBridge {
         gameState: GameState,
         weaponSystem: WeaponSystem? = null,
         towerSystem: TowerSystem? = null,
-        waveSystem: WaveSystem? = null
+        waveSystem: WaveSystem? = null,
+        refreshBuildPlacementUi: (() -> Unit)? = null
     ) {
         _gameState = gameState
         _weaponSystem = weaponSystem
         _towerSystem = towerSystem
         _waveSystem = waveSystem
+        _refreshBuildPlacementUi = refreshBuildPlacementUi
     }
 
     /**
@@ -72,6 +77,7 @@ object TestGameBridge {
         _weaponSystem = null
         _towerSystem = null
         _waveSystem = null
+        _refreshBuildPlacementUi = null
     }
 
     /**
@@ -123,6 +129,11 @@ object TestGameBridge {
 
     /** Debug-only deterministic access for real boss-to-build instrumentation. */
     fun rawWaveSystem(): WaveSystem? = _waveSystem
+
+    /** Refreshes Compose's 10 Hz build-state mirror after deterministic test setup. */
+    fun refreshBuildPlacementUi() {
+        _refreshBuildPlacementUi?.invoke()
+    }
 
     /**
      * Immutable snapshot of game state at a point in time.
