@@ -3,6 +3,7 @@ package com.survivortd.game.testing
 import com.survivortd.game.components.EnemyComponent
 import com.survivortd.game.core.GameState
 import com.survivortd.game.systems.WeaponSystem
+import com.survivortd.game.systems.TowerSystem
 
 /**
  * Test bridge — allows E2E instrumentation tests to inspect the live [GameState]
@@ -36,6 +37,9 @@ object TestGameBridge {
     @Volatile
     private var _weaponSystem: WeaponSystem? = null
 
+    @Volatile
+    private var _towerSystem: TowerSystem? = null
+
     /**
      * Whether the bridge is active. Only true in debug builds after [register] is called.
      */
@@ -44,9 +48,14 @@ object TestGameBridge {
     /**
      * Register the live game state. Called from GameScreen on debug builds.
      */
-    fun register(gameState: GameState, weaponSystem: WeaponSystem? = null) {
+    fun register(
+        gameState: GameState,
+        weaponSystem: WeaponSystem? = null,
+        towerSystem: TowerSystem? = null
+    ) {
         _gameState = gameState
         _weaponSystem = weaponSystem
+        _towerSystem = towerSystem
     }
 
     /**
@@ -55,6 +64,7 @@ object TestGameBridge {
     fun unregister() {
         _gameState = null
         _weaponSystem = null
+        _towerSystem = null
     }
 
     /**
@@ -92,7 +102,8 @@ object TestGameBridge {
                 enemyCount = enemyCount,
                 elapsedTime = state.elapsedSeconds,
                 score = state.score,
-                weaponCount = _weaponSystem?.weapons?.size ?: 0
+                weaponCount = _weaponSystem?.weapons?.size ?: 0,
+                towerCount = _towerSystem?.towers?.size ?: 0
             )
         }
     }
@@ -117,6 +128,7 @@ object TestGameBridge {
         val enemyCount: Int,
         val elapsedTime: Float,
         val score: Long,
-        val weaponCount: Int
+        val weaponCount: Int,
+        val towerCount: Int
     )
 }
