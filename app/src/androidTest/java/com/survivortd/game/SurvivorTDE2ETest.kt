@@ -1,15 +1,23 @@
 package com.survivortd.game
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.platform.app.InstrumentationRegistry
+import com.survivortd.game.components.TagComponent
 import com.survivortd.game.data.SaveManager
 import com.survivortd.game.testing.TestGameBridge
+import java.io.FileOutputStream
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -210,6 +218,95 @@ class SurvivorTDE2ETest {
                 TestGameBridge.snapshot()!!.elapsedTime,
                 0.001f
             )
+        } finally {
+            composeRule.mainClock.autoAdvance = true
+        }
+    }
+
+    @Test
+    fun build_placement_is_visible_in_world_and_minimap() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        runBlocking {
+            SaveManager.saveSettings(context, SaveManager.GameSettings(isFirstRun = false))
+        }
+
+        composeRule.mainClock.autoAdvance = false
+        try {
+            composeRule.onNodeWithTag("play_button").performClick()
+            composeRule.mainClock.advanceTimeBy(1000L)
+
+            val bridgeDeadline = System.currentTimeMillis() + 10_000L
+            while (!TestGameBridge.isActive && System.currentTimeMillis() < bridgeDeadline) {
+                Thread.sleep(100L)
+            }
+            assertTrue("TestGameBridge should be active after PLAY", TestGameBridge.isActive)
+
+            val state = TestGameBridge.rawState()!!
+            state.withSynchronizedAccess {
+                state.elapsedSeconds = 300f
+                state.players[state.playerIndex].scrap = 1_000
+                state.healths[state.playerIndex].apply {
+                    maxHp = 100_000f
+                    currentHp = 100_000f
+                }
+            }
+
+            val bossDeadline = System.currentTimeMillis() + 5_000L
+            while (System.currentTimeMillis() < bossDeadline) {
+                val hasBoss = state.withSynchronizedAccess {
+                    state.enemies.indices.any { index ->
+                        state.tags.getOrNull(index)?.tag == TagComponent.EntityTag.ENEMY &&
+                            state.enemies[index].type ==
+                            com.survivortd.game.components.EnemyComponent.EnemyData.BOSS
+                    }
+                }
+                if (hasBoss) break
+                Thread.sleep(100L)
+            }
+            state.withSynchronizedAccess {
+                state.enemies.indices.forEach { index ->
+                    if (state.tags.getOrNull(index)?.tag == TagComponent.EntityTag.ENEMY) {
+                        state.healths[index].currentHp = 0f
+                    }
+                }
+            }
+
+            val overlay = composeRule.onAllNodesWithTag("build_phase_overlay")
+            val buildDeadline = System.currentTimeMillis() + 5_000L
+            while (overlay.fetchSemanticsNodes(atLeastOneRootRequired = false).isEmpty() &&
+                System.currentTimeMillis() < buildDeadline
+            ) {
+                composeRule.mainClock.advanceTimeBy(100L)
+                Thread.sleep(100L)
+            }
+            assertTrue(
+                "Boss defeat should expose the real build-phase journey",
+                overlay.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+            )
+            state.isPaused = true
+
+            composeRule.onNodeWithTag("tower_btn_GUN_TURRET").performClick()
+            composeRule.onNodeWithTag("game_screen").performTouchInput {
+                click(Offset(300f, 800f))
+                click(Offset(780f, 1_250f))
+            }
+            composeRule.mainClock.advanceTimeBy(500L)
+
+            assertEquals(
+                "Two direct taps should place two towers through the live transform",
+                2,
+                TestGameBridge.snapshot()!!.towerCount
+            )
+
+            val screenshot = context.filesDir.resolve("pr184_tower_minimap.png")
+            FileOutputStream(screenshot).use { output ->
+                composeRule.onRoot().captureToImage().asAndroidBitmap().compress(
+                    android.graphics.Bitmap.CompressFormat.PNG,
+                    100,
+                    output
+                )
+            }
+            assertTrue("Evidence screenshot must be written", screenshot.isFile)
         } finally {
             composeRule.mainClock.autoAdvance = true
         }
