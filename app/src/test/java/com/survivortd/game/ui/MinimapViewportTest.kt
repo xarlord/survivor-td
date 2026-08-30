@@ -55,6 +55,28 @@ class MinimapViewportTest {
     }
 
     @Test
+    fun `placed towers are projected as minimap markers`() {
+        val projection = MinimapProjection(
+            minimapSize = MINIMAP_SIZE,
+            worldWidth = WORLD_WIDTH,
+            worldHeight = WORLD_HEIGHT
+        )
+
+        val markers = projection.projectTowerMarkers(
+            listOf(
+                WorldPoint(x = 320f, y = 180f),
+                WorldPoint(x = 960f, y = 540f)
+            )
+        )
+
+        assertEquals(2, markers.size)
+        assertEquals(40f, markers[0].x, EPSILON)
+        assertEquals(57.5f, markers[0].y, EPSILON)
+        assertEquals(120f, markers[1].x, EPSILON)
+        assertEquals(102.5f, markers[1].y, EPSILON)
+    }
+
+    @Test
     fun `circular clip contains center and edge but rejects square corners`() {
         val projection = MinimapProjection(
             minimapSize = MINIMAP_SIZE,
