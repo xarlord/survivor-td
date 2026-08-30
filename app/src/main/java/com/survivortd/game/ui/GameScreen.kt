@@ -493,6 +493,7 @@ fun GameScreen(
             fps = hudFps,
             wave = hudWave,
             waveText = hudWaveText,
+            onPause = { isPaused = true },
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
@@ -572,24 +573,6 @@ fun GameScreen(
             )
         }
 
-        // === LAYER 4: Pause Button (#94) ===
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 16.dp, end = 16.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF333A4D))
-                .testTag("pause_button")
-        ) {
-            Text(
-                text = "⏸",
-                fontSize = 20.sp,
-                modifier = Modifier
-                    .clickable { isPaused = true }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            )
-        }
-
         // === LAYER 5: Pause Overlay (#94) ===
         if (isPaused && !showRunSummary) {
             PauseOverlay(
@@ -635,7 +618,7 @@ fun GameScreen(
         }
 
         // === LAYER 7: Minimap (#98) ===
-        visibleWorldTransform?.let { transform ->
+        if (!isBuildPhaseUi) visibleWorldTransform?.let { transform ->
             MinimapView(
                 gameState = gameState,
                 towerSystem = towerSystem,
@@ -1412,6 +1395,7 @@ private fun GameHUD(
     fps: Int = 0,
     wave: Int = 0,
     waveText: String = "",
+    onPause: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -1509,8 +1493,21 @@ private fun GameHUD(
             HudStatChip(
                 label = "TIME",
                 value = "$mins:${secs.toString().padStart(2, '0')}",
-                color = com.survivortd.game.ui.theme.StdColors.TextPrimary
+                color = com.survivortd.game.ui.theme.StdColors.TextPrimary,
+                modifier = Modifier.testTag("hud_time")
             )
+            Spacer(modifier = Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF333A4D))
+                    .clickable(onClick = onPause)
+                    .testTag("pause_button"),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = "⏸", fontSize = 20.sp)
+            }
         }
 
         Spacer(modifier = Modifier.height(6.dp))
@@ -1886,6 +1883,7 @@ private fun MinimapView(
     Canvas(
         modifier = modifier
             .size(GameConfig.MINIMAP_SIZE_DP.dp)
+            .testTag("minimap")
     ) {
         val mapSize = size.width
         val projection = MinimapProjection(
