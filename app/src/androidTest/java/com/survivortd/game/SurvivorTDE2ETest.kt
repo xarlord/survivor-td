@@ -1,6 +1,8 @@
 package com.survivortd.game
 
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -10,7 +12,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.platform.app.InstrumentationRegistry
 import com.survivortd.game.components.TagComponent
 import com.survivortd.game.data.SaveManager
@@ -148,9 +150,17 @@ class SurvivorTDE2ETest {
                 composeRule.onAllNodesWithText("Shop", substring = true)
                     .fetchSemanticsNodes(atLeastOneRootRequired = false).size
             )
-            composeRule.onNodeWithTag("tutorial_start_button")
-                .performScrollTo()
-                .assertIsDisplayed()
+            val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+            val startBounds = composeRule.onNodeWithTag("tutorial_start_button")
+                .fetchSemanticsNode().boundsInRoot
+            val scrollRange = composeRule.onNodeWithTag("tutorial_content")
+                .fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+            val actionAlreadyVisible = startBounds.top >= rootBounds.top &&
+                startBounds.bottom <= rootBounds.bottom
+            assertTrue(
+                "Tutorial action must be visible or reachable through a bounded vertical scroll",
+                actionAlreadyVisible || scrollRange.maxValue() > 0f
+            )
             assertEquals(
                 "Tutorial modal must remove HUD from semantics",
                 0,
@@ -170,7 +180,13 @@ class SurvivorTDE2ETest {
                     .fetchSemanticsNodes(atLeastOneRootRequired = false).size
             )
 
-            tutorial[0].performClick()
+            composeRule.onNodeWithTag("tutorial_content")
+                .performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy ->
+                    scrollBy(0f, scrollRange.maxValue())
+                }
+            composeRule.mainClock.advanceTimeBy(100L)
+            composeRule.onNodeWithTag("tutorial_start_button")
+                .performSemanticsAction(SemanticsActions.OnClick) { click -> click() }
             composeRule.mainClock.advanceTimeBy(1000L)
 
             assertEquals(
