@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.platform.app.InstrumentationRegistry
 import com.survivortd.game.components.TagComponent
 import com.survivortd.game.data.SaveManager
@@ -147,6 +148,9 @@ class SurvivorTDE2ETest {
                 composeRule.onAllNodesWithText("Shop", substring = true)
                     .fetchSemanticsNodes(atLeastOneRootRequired = false).size
             )
+            composeRule.onNodeWithTag("tutorial_start_button")
+                .performScrollTo()
+                .assertIsDisplayed()
             assertEquals(
                 "Tutorial modal must remove HUD from semantics",
                 0,
