@@ -256,7 +256,7 @@ class SurvivorTDE2ETest {
             )
             assertEquals(elapsedBeforeDismiss, TestGameBridge.snapshot()!!.elapsedTime, 0.001f)
 
-            tutorial[0].performClick()
+            dismissTutorialIfPresent()
             composeRule.mainClock.advanceTimeBy(1000L)
 
             val dialogCount = composeRule.onAllNodesWithText("LEVEL UP!", substring = true)
@@ -432,11 +432,19 @@ class SurvivorTDE2ETest {
     }
 
     private fun dismissTutorialIfPresent() {
-        val tutorialButtons = composeRule.onAllNodesWithText("LET'S GO!", substring = true)
+        val tutorialButtons = composeRule.onAllNodesWithTag("tutorial_start_button")
         val deadline = System.currentTimeMillis() + 3000L
         while (System.currentTimeMillis() < deadline) {
             if (tutorialButtons.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()) {
-                tutorialButtons[0].performClick()
+                val scrollRange = composeRule.onNodeWithTag("tutorial_content")
+                    .fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+                composeRule.onNodeWithTag("tutorial_content")
+                    .performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy ->
+                        scrollBy(0f, scrollRange.maxValue())
+                    }
+                composeRule.mainClock.advanceTimeBy(100L)
+                tutorialButtons[0]
+                    .performSemanticsAction(SemanticsActions.OnClick) { click -> click() }
                 composeRule.mainClock.advanceTimeBy(1000L)
                 return
             }
