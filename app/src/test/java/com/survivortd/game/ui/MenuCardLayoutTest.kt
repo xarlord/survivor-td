@@ -18,7 +18,6 @@ class MenuCardLayoutTest {
             listOf(AppIcon.MENU_HEROES, AppIcon.MENU_UPGRADES, AppIcon.MENU_SETTINGS),
             cards.map { it.icon }
         )
-        assertTrue(cards.all { it.icon is AppIcon })
     }
 
     @Test

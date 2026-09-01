@@ -216,21 +216,21 @@ fun MainMenuScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 MenuButton(
-                    label = "Heroes",
+                    card = MenuCardLayout.secondaryCards[0],
                     onClick = onHeroes,
                     modifier = Modifier
                         .weight(1f)
                         .testTag("heroes_button")
                 )
                 MenuButton(
-                    label = "Upgrades",
+                    card = MenuCardLayout.secondaryCards[1],
                     onClick = onShop,
                     modifier = Modifier
                         .weight(1f)
                         .testTag("shop_button")
                 )
                 MenuButton(
-                    label = "Settings",
+                    card = MenuCardLayout.secondaryCards[2],
                     onClick = onSettings,
                     modifier = Modifier
                         .weight(1f)
@@ -243,11 +243,10 @@ fun MainMenuScreen(
 
 @Composable
 private fun MenuButton(
-    label: String,
+    card: MenuCardSpec,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val icon = MenuCardLayout.shortIcon(label)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -259,14 +258,14 @@ private fun MenuButton(
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 14.dp)
     ) {
-        Text(
-            text = icon,
-            fontSize = 22.sp,
-            color = StdColors.CyanBright
+        AppIconView(
+            icon = card.icon,
+            tint = StdColors.CyanBright,
+            size = MenuCardLayout.ICON_SP.dp
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = label,
+            text = card.label,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             color = StdColors.TextPrimary,

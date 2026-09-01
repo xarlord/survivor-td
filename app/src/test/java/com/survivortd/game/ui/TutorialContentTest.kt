@@ -10,7 +10,6 @@ class TutorialContentTest {
     fun `tutorial uses six stable typed steps without emoji`() {
         assertEquals(6, TutorialContent.steps.size)
         assertEquals(6, TutorialContent.steps.map { it.id }.distinct().size)
-        assertTrue(TutorialContent.steps.all { it.icon is AppIcon })
 
         val visibleCopy = TutorialContent.steps.joinToString(" ") { "${it.title} ${it.instruction}" }
         listOf("🕹", "⚔", "⬆", "💰", "🛡", "⏸").forEach { emoji ->
