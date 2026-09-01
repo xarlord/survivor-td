@@ -94,6 +94,14 @@ class SurvivorTDE2ETest {
 
         composeRule.mainClock.autoAdvance = false
         try {
+            listOf("⚔️", "🛒", "⚙️").forEach { formerEmoji ->
+                assertEquals(
+                    "Secondary menu navigation must not expose platform emoji",
+                    0,
+                    composeRule.onAllNodesWithText(formerEmoji, substring = true)
+                        .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+                )
+            }
             composeRule.onNodeWithTag("play_button").performClick()
             composeRule.mainClock.advanceTimeBy(100L)
 
@@ -125,6 +133,19 @@ class SurvivorTDE2ETest {
             assertTrue(
                 "First-run tutorial must own the exclusive game route",
                 tutorial.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+            )
+            listOf("up and down", "Double-tap", "dash", "Upgrades between runs").forEach { copy ->
+                assertTrue(
+                    "Tutorial must expose required onboarding copy: $copy",
+                    composeRule.onAllNodesWithText(copy, substring = true)
+                        .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+                )
+            }
+            assertEquals(
+                "Tutorial terminology must not refer to the retired Shop label",
+                0,
+                composeRule.onAllNodesWithText("Shop", substring = true)
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
             )
             assertEquals(
                 "Tutorial modal must remove HUD from semantics",
