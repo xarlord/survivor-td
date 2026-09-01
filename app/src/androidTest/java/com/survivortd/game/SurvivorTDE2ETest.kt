@@ -1,6 +1,8 @@
 package com.survivortd.game
 
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -10,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.platform.app.InstrumentationRegistry
 import com.survivortd.game.components.TagComponent
 import com.survivortd.game.data.SaveManager
@@ -94,6 +97,14 @@ class SurvivorTDE2ETest {
 
         composeRule.mainClock.autoAdvance = false
         try {
+            listOf("⚔️", "🛒", "⚙️").forEach { formerEmoji ->
+                assertEquals(
+                    "Secondary menu navigation must not expose platform emoji",
+                    0,
+                    composeRule.onAllNodesWithText(formerEmoji, substring = true)
+                        .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+                )
+            }
             composeRule.onNodeWithTag("play_button").performClick()
             composeRule.mainClock.advanceTimeBy(100L)
 
@@ -126,6 +137,30 @@ class SurvivorTDE2ETest {
                 "First-run tutorial must own the exclusive game route",
                 tutorial.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
             )
+            listOf("up and down", "Double-tap", "dash", "Upgrades between runs").forEach { copy ->
+                assertTrue(
+                    "Tutorial must expose required onboarding copy: $copy",
+                    composeRule.onAllNodesWithText(copy, substring = true)
+                        .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+                )
+            }
+            assertEquals(
+                "Tutorial terminology must not refer to the retired Shop label",
+                0,
+                composeRule.onAllNodesWithText("Shop", substring = true)
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
+            val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+            val startBounds = composeRule.onNodeWithTag("tutorial_start_button")
+                .fetchSemanticsNode().boundsInRoot
+            val scrollRange = composeRule.onNodeWithTag("tutorial_content")
+                .fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+            val actionAlreadyVisible = startBounds.top >= rootBounds.top &&
+                startBounds.bottom <= rootBounds.bottom
+            assertTrue(
+                "Tutorial action must be visible or reachable through a bounded vertical scroll",
+                actionAlreadyVisible || scrollRange.maxValue() > 0f
+            )
             assertEquals(
                 "Tutorial modal must remove HUD from semantics",
                 0,
@@ -145,7 +180,13 @@ class SurvivorTDE2ETest {
                     .fetchSemanticsNodes(atLeastOneRootRequired = false).size
             )
 
-            tutorial[0].performClick()
+            composeRule.onNodeWithTag("tutorial_content")
+                .performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy ->
+                    scrollBy(0f, scrollRange.maxValue())
+                }
+            composeRule.mainClock.advanceTimeBy(100L)
+            composeRule.onNodeWithTag("tutorial_start_button")
+                .performSemanticsAction(SemanticsActions.OnClick) { click -> click() }
             composeRule.mainClock.advanceTimeBy(1000L)
 
             assertEquals(
@@ -215,7 +256,7 @@ class SurvivorTDE2ETest {
             )
             assertEquals(elapsedBeforeDismiss, TestGameBridge.snapshot()!!.elapsedTime, 0.001f)
 
-            tutorial[0].performClick()
+            dismissTutorialIfPresent()
             composeRule.mainClock.advanceTimeBy(1000L)
 
             val dialogCount = composeRule.onAllNodesWithText("LEVEL UP!", substring = true)
@@ -391,11 +432,19 @@ class SurvivorTDE2ETest {
     }
 
     private fun dismissTutorialIfPresent() {
-        val tutorialButtons = composeRule.onAllNodesWithText("LET'S GO!", substring = true)
+        val tutorialButtons = composeRule.onAllNodesWithTag("tutorial_start_button")
         val deadline = System.currentTimeMillis() + 3000L
         while (System.currentTimeMillis() < deadline) {
             if (tutorialButtons.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()) {
-                tutorialButtons[0].performClick()
+                val scrollRange = composeRule.onNodeWithTag("tutorial_content")
+                    .fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+                composeRule.onNodeWithTag("tutorial_content")
+                    .performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy ->
+                        scrollBy(0f, scrollRange.maxValue())
+                    }
+                composeRule.mainClock.advanceTimeBy(100L)
+                tutorialButtons[0]
+                    .performSemanticsAction(SemanticsActions.OnClick) { click -> click() }
                 composeRule.mainClock.advanceTimeBy(1000L)
                 return
             }
