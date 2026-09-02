@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.survivortd.game.config.TowerType
@@ -105,10 +104,14 @@ fun BuildPhaseOverlay(
                         .padding(vertical = 8.dp, horizontal = 4.dp)
                         .testTag("tower_btn_${type.name}")
                 ) {
-                    Text(
-                        text = towerEmoji(type),
-                        fontSize = 18.sp,
-                        textAlign = TextAlign.Center
+                    AppIconView(
+                        icon = towerIcon(type),
+                        tint = when {
+                            isSelected -> StdColors.Amber
+                            canAfford -> StdColors.CyanBright
+                            else -> StdColors.TextMuted
+                        },
+                        size = 22.dp
                     )
                     Text(
                         text = type.baseCost.toString(),
@@ -128,13 +131,13 @@ fun BuildPhaseOverlay(
     }
 }
 
-private fun towerEmoji(type: TowerType): String = when (type) {
-    TowerType.GUN_TURRET -> "🔫"
-    TowerType.CANNON -> "💣"
-    TowerType.FROST_TOWER -> "❄️"
-    TowerType.TESLA_COIL -> "⚡"
-    TowerType.POISON_TOWER -> "☠️"
-    TowerType.ROCKET_POD -> "🚀"
+internal fun towerIcon(type: TowerType): AppIcon = when (type) {
+    TowerType.GUN_TURRET -> AppIcon.TOWER_GUN
+    TowerType.CANNON -> AppIcon.TOWER_CANNON
+    TowerType.FROST_TOWER -> AppIcon.TOWER_FROST
+    TowerType.TESLA_COIL -> AppIcon.TOWER_TESLA
+    TowerType.POISON_TOWER -> AppIcon.TOWER_POISON
+    TowerType.ROCKET_POD -> AppIcon.TOWER_ROCKET
 }
 
 object BuildPlacement {

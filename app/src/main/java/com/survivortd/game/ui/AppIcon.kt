@@ -10,5 +10,11 @@ enum class AppIcon {
     LEVEL_UP,
     UPGRADES,
     TOWERS,
-    PAUSE
+    PAUSE,
+    TOWER_GUN,
+    TOWER_CANNON,
+    TOWER_FROST,
+    TOWER_TESLA,
+    TOWER_POISON,
+    TOWER_ROCKET
 }
