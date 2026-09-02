@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -633,17 +634,22 @@ fun GameScreen(
 
         // === Gameplay chrome: Minimap (#98) ===
         if (presentation.showMinimap) visibleWorldTransform?.let { transform ->
-            MinimapView(
-                gameState = gameState,
-                towerSystem = towerSystem,
-                visibleWorldTransform = transform,
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
                     .padding(
                         end = GameConfig.MINIMAP_MARGIN_DP.dp,
                         bottom = GameConfig.MINIMAP_MARGIN_DP.dp
                     )
-            )
+            ) {
+                MinimapView(
+                    gameState = gameState,
+                    towerSystem = towerSystem,
+                    visibleWorldTransform = transform,
+                    modifier = Modifier.size(GameConfig.MINIMAP_SIZE_DP.dp)
+                )
+            }
         }
 
         // === Highest-priority modal candidate: Tutorial Overlay (#95) ===
@@ -1909,7 +1915,6 @@ private fun MinimapView(
 ) {
     Canvas(
         modifier = modifier
-            .size(GameConfig.MINIMAP_SIZE_DP.dp)
             .testTag("minimap")
     ) {
         val mapSize = size.width
