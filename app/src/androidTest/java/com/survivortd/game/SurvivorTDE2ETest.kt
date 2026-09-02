@@ -13,6 +13,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import com.survivortd.game.components.TagComponent
 import com.survivortd.game.data.SaveManager
@@ -385,6 +387,43 @@ class SurvivorTDE2ETest {
             composeRule.mainClock.advanceTimeBy(500L)
             composeRule.waitForIdle()
             composeRule.onNodeWithTag("minimap").assertIsDisplayed()
+
+            val density = composeRule.activity.resources.displayMetrics.density
+            val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+            val minimapBounds = composeRule.onNodeWithTag("minimap")
+                .fetchSemanticsNode().boundsInRoot
+            val navigationBarBottomPx = ViewCompat.getRootWindowInsets(
+                composeRule.activity.window.decorView
+            )!!.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom.toFloat()
+            val safeContentBottom = rootBounds.bottom - navigationBarBottomPx
+            val expectedSizePx = 80f * density
+            val expectedClearancePx = 12f * density
+            assertEquals(
+                "Minimap drawable width must be fixed at 80dp",
+                expectedSizePx,
+                minimapBounds.width,
+                0.5f
+            )
+            assertEquals(
+                "Minimap drawable height must be fixed at 80dp",
+                expectedSizePx,
+                minimapBounds.height,
+                0.5f
+            )
+            assertEquals(
+                "Minimap must keep 12dp end clearance from the Compose root",
+                expectedClearancePx,
+                rootBounds.right - minimapBounds.right,
+                0.5f
+            )
+            assertEquals(
+                "Minimap must keep 12dp bottom clearance from the navigation-bar-safe " +
+                    "content boundary (root=$rootBounds, minimap=$minimapBounds, " +
+                    "navigationBarBottomPx=$navigationBarBottomPx, density=$density)",
+                expectedClearancePx,
+                safeContentBottom - minimapBounds.bottom,
+                0.5f
+            )
 
             val minimapScreenshot = context.filesDir.resolve("pr184_tower_minimap.png")
             FileOutputStream(minimapScreenshot).use { output ->
