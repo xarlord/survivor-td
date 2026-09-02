@@ -3,11 +3,17 @@ package com.survivortd.game.ui
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.AcUnit
+import androidx.compose.material.icons.rounded.Adjust
+import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.Games
+import androidx.compose.material.icons.rounded.GpsFixed
 import androidx.compose.material.icons.rounded.Paid
 import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.RocketLaunch
+import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Star
@@ -34,6 +40,12 @@ fun AppIconView(
         AppIcon.UPGRADES -> Icons.Rounded.Paid
         AppIcon.TOWERS -> Icons.Rounded.Shield
         AppIcon.PAUSE -> Icons.Rounded.PauseCircle
+        AppIcon.TOWER_GUN -> Icons.Rounded.GpsFixed
+        AppIcon.TOWER_CANNON -> Icons.Rounded.Adjust
+        AppIcon.TOWER_FROST -> Icons.Rounded.AcUnit
+        AppIcon.TOWER_TESLA -> Icons.Rounded.Bolt
+        AppIcon.TOWER_POISON -> Icons.Rounded.Science
+        AppIcon.TOWER_ROCKET -> Icons.Rounded.RocketLaunch
     }
 
     Icon(
