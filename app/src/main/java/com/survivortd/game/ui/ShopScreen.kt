@@ -8,11 +8,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -23,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,11 +48,13 @@ fun ShopScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .testTag("shop_screen_root")
             .background(Color(0xFF0A0E1A))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
                 .padding(16.dp)
         ) {
             // Header
@@ -84,13 +92,20 @@ fun ShopScreen(
                 contentPadding = PaddingValues(vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("shop_upgrade_grid")
             ) {
                 items(MetaProgression.UpgradeItem.entries) { item ->
                     UpgradeCard(
                         item = item,
                         meta = meta,
-                        onBuy = { onBuy(item) }
+                        onBuy = { onBuy(item) },
+                        modifier = if (item == MetaProgression.UpgradeItem.STARTING_WEAPON) {
+                            Modifier.testTag("shop_upgrade_head_start_card")
+                        } else {
+                            Modifier
+                        }
                     )
                 }
             }
@@ -104,7 +119,8 @@ fun ShopScreen(
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFF333A4D))
                     .clickable(onClick = onBack)
-                    .padding(vertical = 14.dp),
+                    .padding(vertical = 14.dp)
+                    .testTag("shop_back_button"),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -122,7 +138,8 @@ fun ShopScreen(
 private fun UpgradeCard(
     item: MetaProgression.UpgradeItem,
     meta: MetaProgression,
-    onBuy: () -> Unit
+    onBuy: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val currentLevel = item.currentLevel(meta)
     val isMaxed = item.isMaxed(meta)
@@ -130,7 +147,7 @@ private fun UpgradeCard(
     val canAfford = meta.gold >= cost
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(Color(0xFF1E1E2E))
