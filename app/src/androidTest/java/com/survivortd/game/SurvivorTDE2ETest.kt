@@ -108,6 +108,26 @@ class SurvivorTDE2ETest {
     }
 
     @Test
+    fun upgrade_shop_back_control_respects_safe_bottom_gutter() {
+        composeRule.onNodeWithText("Upgrades").performClick()
+        composeRule.waitForIdle()
+
+        val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        val backLabelBounds = composeRule.onNodeWithText("← BACK")
+            .fetchSemanticsNode().boundsInRoot
+        val systemInsets = ViewCompat.getRootWindowInsets(
+            composeRule.activity.window.decorView
+        )!!.getInsets(WindowInsetsCompat.Type.systemBars())
+        val contentGutterPx = 16f * composeRule.activity.resources.displayMetrics.density
+
+        assertTrue(
+            "Upgrade Shop Back control must remain above the navigation bar with a 16dp gutter: " +
+                "label=$backLabelBounds, root=$rootBounds, insets=$systemInsets",
+            backLabelBounds.bottom <= rootBounds.bottom - systemInsets.bottom - contentGutterPx
+        )
+    }
+
+    @Test
     fun tapping_play_does_not_crash_app() {
         clickPlayButton()
         Thread.sleep(3000)
