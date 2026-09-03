@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -75,6 +76,7 @@ fun HeroSelectScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF0D0B10))
+            .safeDrawingPadding()
             .testTag("hero_select_screen"),
         contentAlignment = Alignment.Center
     ) {
@@ -321,16 +323,11 @@ private fun HeroCard(
             .testTag("hero_card_${hero.name}"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Hero icon/emoji
-        val icon = when (hero) {
-            HeroId.COMMANDER -> "🎖️"
-            HeroId.BERSERKER -> "⚔️"
-            HeroId.ENGINEER -> "🔧"
-            HeroId.MEDIC -> "🏥"
-            HeroId.SCOUT -> "👁️"
-            HeroId.SHIELDER -> "🛡️"
-        }
-        Text(text = icon, fontSize = 32.sp)
+        AppIconView(
+            icon = heroIcon(hero),
+            tint = if (isUnlocked) Color(0xFFF3EFF7) else Color(0xFF9E9E9E),
+            size = 32.dp
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -384,16 +381,35 @@ private fun HeroCard(
             }
         } else {
             // Lock status
-            Text(
-                text = if (unlockInfo.unlockCondition.isNotEmpty()) {
-                    "🔒 ${unlockInfo.unlockCondition}"
-                } else {
-                    "🔒 ${unlockInfo.unlockCost} Gold"
-                },
-                fontSize = 11.sp,
-                color = if (playerGold >= unlockInfo.unlockCost)
-                    Color(0xFFFFD700) else Color(0xFFFF1744)
-            )
+            val lockedColor = if (playerGold >= unlockInfo.unlockCost) {
+                Color(0xFFFFD700)
+            } else {
+                Color(0xFFFF1744)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AppIconView(icon = AppIcon.LOCKED, tint = lockedColor, size = 14.dp)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = lockedHeroLabel(
+                        unlockCondition = unlockInfo.unlockCondition,
+                        unlockCost = unlockInfo.unlockCost
+                    ),
+                    fontSize = 11.sp,
+                    color = lockedColor
+                )
+            }
         }
     }
 }
+
+internal fun heroIcon(hero: HeroId): AppIcon = when (hero) {
+    HeroId.COMMANDER -> AppIcon.HERO_COMMANDER
+    HeroId.BERSERKER -> AppIcon.HERO_BERSERKER
+    HeroId.ENGINEER -> AppIcon.HERO_ENGINEER
+    HeroId.MEDIC -> AppIcon.HERO_MEDIC
+    HeroId.SCOUT -> AppIcon.HERO_SCOUT
+    HeroId.SHIELDER -> AppIcon.HERO_SHIELDER
+}
+
+internal fun lockedHeroLabel(unlockCondition: String, unlockCost: Int): String =
+    unlockCondition.ifEmpty { "$unlockCost Gold" }

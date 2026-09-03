@@ -6,9 +6,15 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.AcUnit
 import androidx.compose.material.icons.rounded.Adjust
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.Games
 import androidx.compose.material.icons.rounded.GpsFixed
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.MedicalServices
+import androidx.compose.material.icons.rounded.MilitaryTech
 import androidx.compose.material.icons.rounded.Paid
 import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material.icons.rounded.Person
@@ -46,6 +52,13 @@ fun AppIconView(
         AppIcon.TOWER_TESLA -> Icons.Rounded.Bolt
         AppIcon.TOWER_POISON -> Icons.Rounded.Science
         AppIcon.TOWER_ROCKET -> Icons.Rounded.RocketLaunch
+        AppIcon.HERO_COMMANDER -> Icons.Rounded.MilitaryTech
+        AppIcon.HERO_BERSERKER -> Icons.Rounded.FitnessCenter
+        AppIcon.HERO_ENGINEER -> Icons.Rounded.Build
+        AppIcon.HERO_MEDIC -> Icons.Rounded.MedicalServices
+        AppIcon.HERO_SCOUT -> Icons.Rounded.Explore
+        AppIcon.HERO_SHIELDER -> Icons.Rounded.Shield
+        AppIcon.LOCKED -> Icons.Rounded.Lock
     }
 
     Icon(
