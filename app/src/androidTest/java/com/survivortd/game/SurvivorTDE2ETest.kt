@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -105,6 +107,60 @@ class SurvivorTDE2ETest {
             "Selected-hero summary must end above the navigation bar: $summaryBounds, insets=$systemInsets",
             summaryBounds.bottom <= rootBounds.bottom - systemInsets.bottom
         )
+    }
+
+    @Test
+    fun upgrade_shop_back_control_respects_safe_bottom_gutter() {
+        composeRule.onNodeWithText("Upgrades").performClick()
+        composeRule.waitForIdle()
+
+        val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        val backBounds = composeRule.onNodeWithTag("shop_back_button")
+            .fetchSemanticsNode().boundsInRoot
+        val systemInsets = ViewCompat.getRootWindowInsets(
+            composeRule.activity.window.decorView
+        )!!.getInsets(WindowInsetsCompat.Type.systemBars())
+        val contentGutterPx = 16f * composeRule.activity.resources.displayMetrics.density
+        val minimumTouchTargetPx = 48f * composeRule.activity.resources.displayMetrics.density
+
+        assertTrue(
+            "Upgrade Shop Back control must be at least 48dp tall: back=$backBounds",
+            backBounds.height >= minimumTouchTargetPx
+        )
+        assertTrue(
+            "Upgrade Shop Back control must remain horizontally inside the root: " +
+                "back=$backBounds, root=$rootBounds",
+            backBounds.left >= rootBounds.left && backBounds.right <= rootBounds.right
+        )
+        assertTrue(
+            "Upgrade Shop Back control must remain above the navigation bar with a 16dp gutter: " +
+                "back=$backBounds, root=$rootBounds, insets=$systemInsets",
+            backBounds.top >= rootBounds.top &&
+                backBounds.bottom <= rootBounds.bottom - systemInsets.bottom - contentGutterPx
+        )
+    }
+
+    @Test
+    fun upgrade_shop_final_card_is_fully_scroll_reachable_with_fixed_back_control() {
+        composeRule.onNodeWithText("Upgrades").performClick()
+        composeRule.waitForIdle()
+
+        val backBefore = composeRule.onNodeWithTag("shop_back_button")
+            .fetchSemanticsNode().boundsInRoot
+        composeRule.onNodeWithTag("shop_upgrade_grid")
+            .performScrollToNode(hasTestTag("shop_upgrade_head_start_card"))
+        composeRule.waitForIdle()
+
+        val gridBounds = composeRule.onNodeWithTag("shop_upgrade_grid")
+            .fetchSemanticsNode().boundsInRoot
+        val cardBounds = composeRule.onNodeWithTag("shop_upgrade_head_start_card")
+            .fetchSemanticsNode().boundsInRoot
+        val backAfter = composeRule.onNodeWithTag("shop_back_button")
+            .fetchSemanticsNode().boundsInRoot
+
+        assertTrue("Head Start card must be fully inside the grid after scrolling: card=$cardBounds, grid=$gridBounds",
+            cardBounds.top >= gridBounds.top && cardBounds.bottom <= gridBounds.bottom)
+        assertEquals("Back control must remain fixed while the grid scrolls", backBefore, backAfter)
     }
 
     @Test
