@@ -73,6 +73,41 @@ class SurvivorTDE2ETest {
     }
 
     @Test
+    fun hero_selection_uses_typed_icons_and_respects_safe_drawing_bounds() {
+        composeRule.onNodeWithText("Heroes").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("hero_select_screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("hero_starting_weapon").assertIsDisplayed()
+        listOf("🎖️", "⚔️", "🔧", "🏥", "👁️", "🛡️", "🔒").forEach { formerEmoji ->
+            assertEquals(
+                "Hero selection must not expose platform emoji: $formerEmoji",
+                0,
+                composeRule.onAllNodesWithText(formerEmoji, substring = true)
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
+        }
+
+        val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        val backBounds = composeRule.onNodeWithTag("hero_back_button")
+            .fetchSemanticsNode().boundsInRoot
+        val summaryBounds = composeRule.onNodeWithTag("hero_starting_weapon")
+            .fetchSemanticsNode().boundsInRoot
+        val systemInsets = ViewCompat.getRootWindowInsets(
+            composeRule.activity.window.decorView
+        )!!.getInsets(WindowInsetsCompat.Type.systemBars())
+
+        assertTrue(
+            "Back control must begin below the status bar: $backBounds, insets=$systemInsets",
+            backBounds.top >= rootBounds.top + systemInsets.top
+        )
+        assertTrue(
+            "Selected-hero summary must end above the navigation bar: $summaryBounds, insets=$systemInsets",
+            summaryBounds.bottom <= rootBounds.bottom - systemInsets.bottom
+        )
+    }
+
+    @Test
     fun tapping_play_does_not_crash_app() {
         clickPlayButton()
         Thread.sleep(3000)
