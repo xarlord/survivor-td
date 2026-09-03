@@ -319,7 +319,7 @@ private fun HeroCard(
             .background(Color(0xFF1C1921))
             .border(borderWidth, borderColor, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(12.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
             .testTag("hero_card_${hero.name}"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -329,7 +329,7 @@ private fun HeroCard(
             size = 32.dp
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         // Hero name
         Text(
@@ -339,7 +339,7 @@ private fun HeroCard(
             color = if (isUnlocked) Color.White else Color(0xFF9E9E9E)
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
 
         // Description
         Text(
@@ -351,7 +351,7 @@ private fun HeroCard(
             maxLines = 3
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         // Starting weapon
         Text(
@@ -361,7 +361,7 @@ private fun HeroCard(
             fontWeight = FontWeight.Bold
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         // Status indicator
         if (isUnlocked) {
