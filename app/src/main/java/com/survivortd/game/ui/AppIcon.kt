@@ -40,6 +40,12 @@ enum class AppIcon {
     RESULT_WEAPONS
 }
 
+/** Stable visual and accessibility contract for the gameplay HUD pause control. */
+object HudPausePresentation {
+    val icon: AppIcon = AppIcon.PAUSE
+    const val contentDescription: String = "Pause game"
+}
+
 fun UpgradeType.appIcon(): AppIcon = when (this) {
     UpgradeType.NEW_WEAPON -> AppIcon.UPGRADE_NEW_WEAPON
     UpgradeType.UPGRADE_WEAPON -> AppIcon.UPGRADE_WEAPON

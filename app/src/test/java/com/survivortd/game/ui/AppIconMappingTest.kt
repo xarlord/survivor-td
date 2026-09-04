@@ -6,6 +6,15 @@ import org.junit.jupiter.api.Test
 
 class AppIconMappingTest {
     @Test
+    fun `gameplay pause control has a typed icon and meaningful accessibility label`() {
+        assertEquals(AppIcon.PAUSE, HudPausePresentation.icon)
+        assertEquals("Pause game", HudPausePresentation.contentDescription)
+        check(!HudPausePresentation.contentDescription.contains("⏸")) {
+            "Pause accessibility copy must not expose the platform glyph"
+        }
+    }
+
+    @Test
     fun `every upgrade type has an explicit typed icon`() {
         val expected = mapOf(
             UpgradeType.NEW_WEAPON to AppIcon.UPGRADE_NEW_WEAPON,

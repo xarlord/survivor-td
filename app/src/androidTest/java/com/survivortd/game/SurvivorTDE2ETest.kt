@@ -384,8 +384,20 @@ class SurvivorTDE2ETest {
 
             val timerBounds = composeRule.onNodeWithTag("hud_time")
                 .fetchSemanticsNode().boundsInRoot
-            val pauseBounds = composeRule.onNodeWithTag("pause_button")
-                .fetchSemanticsNode().boundsInRoot
+            val pauseNode = composeRule.onNodeWithTag("pause_button")
+                .fetchSemanticsNode()
+            val pauseBounds = pauseNode.boundsInRoot
+            assertEquals(
+                "Pause control must expose meaningful accessibility copy",
+                listOf("Pause game"),
+                pauseNode.config[SemanticsProperties.ContentDescription]
+            )
+            assertEquals(
+                "Gameplay HUD must not expose the legacy platform pause glyph",
+                0,
+                composeRule.onAllNodesWithText("⏸", substring = true)
+                    .fetchSemanticsNodes(atLeastOneRootRequired = false).size
+            )
             assertTrue(
                 "Pause target must not overlap the survival timer",
                 !timerBounds.overlaps(pauseBounds)

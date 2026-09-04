@@ -33,6 +33,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1535,11 +1537,18 @@ private fun GameHUD(
                     .size(48.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xFF333A4D))
+                    .semantics {
+                        contentDescription = HudPausePresentation.contentDescription
+                    }
                     .clickable(onClick = onPause)
                     .testTag("pause_button"),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "⏸", fontSize = 20.sp)
+                AppIconView(
+                    icon = HudPausePresentation.icon,
+                    tint = com.survivortd.game.ui.theme.StdColors.TextPrimary,
+                    size = 24.dp
+                )
             }
         }
 
