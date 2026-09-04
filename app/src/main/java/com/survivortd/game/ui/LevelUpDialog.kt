@@ -156,9 +156,10 @@ private fun UpgradeCard(
                 .border(1.dp, iconColor, RoundedCornerShape(8.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = choiceIcon(choice),
-                fontSize = 24.sp
+            AppIconView(
+                icon = choice.type.appIcon(),
+                tint = iconColor,
+                size = 28.dp
             )
         }
 
@@ -187,16 +188,5 @@ private fun UpgradeCard(
             color = borderColor,
             modifier = Modifier.padding(start = 8.dp)
         )
-    }
-}
-
-private fun choiceIcon(choice: UpgradeChoice): String {
-    return when (choice.type) {
-        com.survivortd.game.systems.UpgradeType.NEW_WEAPON -> "⚔"
-        com.survivortd.game.systems.UpgradeType.UPGRADE_WEAPON -> "↑"
-        com.survivortd.game.systems.UpgradeType.NEW_PASSIVE -> "✦"
-        com.survivortd.game.systems.UpgradeType.UPGRADE_PASSIVE -> "★"
-        com.survivortd.game.systems.UpgradeType.HEAL -> "♥"
-        com.survivortd.game.systems.UpgradeType.STAT_BOOST -> "⚡"
     }
 }

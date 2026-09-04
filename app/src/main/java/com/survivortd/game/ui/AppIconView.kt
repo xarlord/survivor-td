@@ -59,6 +59,18 @@ fun AppIconView(
         AppIcon.HERO_SCOUT -> Icons.Rounded.Explore
         AppIcon.HERO_SHIELDER -> Icons.Rounded.Shield
         AppIcon.LOCKED -> Icons.Rounded.Lock
+        AppIcon.COINS -> Icons.Rounded.Paid
+        AppIcon.UPGRADE_NEW_WEAPON -> Icons.Rounded.FlashOn
+        AppIcon.UPGRADE_WEAPON -> Icons.Rounded.ArrowUpward
+        AppIcon.UPGRADE_NEW_PASSIVE -> Icons.Rounded.Star
+        AppIcon.UPGRADE_PASSIVE -> Icons.Rounded.ArrowUpward
+        AppIcon.UPGRADE_HEAL -> Icons.Rounded.MedicalServices
+        AppIcon.UPGRADE_STAT_BOOST -> Icons.Rounded.Bolt
+        AppIcon.RESULT_TIME -> Icons.Rounded.PauseCircle
+        AppIcon.RESULT_LEVEL -> Icons.Rounded.MilitaryTech
+        AppIcon.RESULT_KILLS -> Icons.Rounded.GpsFixed
+        AppIcon.RESULT_BONUS -> Icons.Rounded.Star
+        AppIcon.RESULT_WEAPONS -> Icons.Rounded.FitnessCenter
     }
 
     Icon(

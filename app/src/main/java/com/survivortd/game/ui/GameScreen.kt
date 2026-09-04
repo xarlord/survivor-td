@@ -1758,14 +1758,26 @@ private fun RunSummaryScreen(
     val titleGlowColor = if (isVictory) Color(0xFF39FF14) else Color(0xFFFF1F44)
 
     @Composable
-    fun LocalStatRow(label: String, value: String) {
+    fun LocalStatRow(metric: ResultMetric, value: String) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(text = label, fontSize = 16.sp, color = Color(0xFFF3EFF7).copy(alpha = 0.7f))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AppIconView(
+                    icon = metric.appIcon(),
+                    tint = Color(0xFFF3EFF7).copy(alpha = 0.7f),
+                    size = 18.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = metric.label,
+                    fontSize = 16.sp,
+                    color = Color(0xFFF3EFF7).copy(alpha = 0.7f)
+                )
+            }
             Text(text = value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF3EFF7))
         }
     }
@@ -1815,14 +1827,14 @@ private fun RunSummaryScreen(
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            LocalStatRow("⏱ Time", timeString)
-            LocalStatRow("🏆 Level", "$level")
-            LocalStatRow("💀 Kills", "$kills")
-            LocalStatRow("🪙 Gold", "$gold")
+            LocalStatRow(ResultMetric.TIME, timeString)
+            LocalStatRow(ResultMetric.LEVEL, "$level")
+            LocalStatRow(ResultMetric.KILLS, "$kills")
+            LocalStatRow(ResultMetric.GOLD, "$gold")
             if (isVictory) {
-                LocalStatRow("🎁 Bonus", "+${GameConfig.GOLD_COMPLETION_BONUS} gold")
+                LocalStatRow(ResultMetric.BONUS, "+${GameConfig.GOLD_COMPLETION_BONUS} gold")
             }
-            LocalStatRow("⚔ Weapons", "$weapons")
+            LocalStatRow(ResultMetric.WEAPONS, "$weapons")
             Spacer(modifier = Modifier.height(24.dp))
 
             Box(
