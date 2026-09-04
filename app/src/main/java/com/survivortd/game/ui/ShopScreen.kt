@@ -69,12 +69,20 @@ fun ShopScreen(
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
-                Text(
-                    text = "🪙 ${meta.gold}",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFFFFD700)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppIconView(
+                        icon = AppIcon.COINS,
+                        tint = Color(0xFFFFD700),
+                        size = 20.dp
+                    )
+                    Spacer(modifier = Modifier.size(4.dp))
+                    Text(
+                        text = coinLabel(meta.gold),
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFFD700)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -187,12 +195,17 @@ private fun UpgradeCard(
                 )
                 // Cost
                 if (!isMaxed) {
-                    Text(
-                        text = "🪙 $cost",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (canAfford) Color(0xFFFFD700) else Color(0xFFFF1744)
-                    )
+                    val costColor = if (canAfford) Color(0xFFFFD700) else Color(0xFFFF1744)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppIconView(icon = AppIcon.COINS, tint = costColor, size = 12.dp)
+                        Spacer(modifier = Modifier.size(2.dp))
+                        Text(
+                            text = coinLabel(cost),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = costColor
+                        )
+                    }
                 } else {
                     Text(
                         text = "MAX",
