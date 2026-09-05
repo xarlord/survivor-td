@@ -195,6 +195,8 @@ class GameState {
             frameCount = 4
         ))
         playerIndex = id
+        cameraX = positions[id].x
+        cameraY = positions[id].y
         return id
     }
 

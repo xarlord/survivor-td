@@ -461,7 +461,9 @@ fun GameScreen(
             VisibleWorldTransform(
                 canvasWidth = gameCanvasSize.width.toFloat(),
                 canvasHeight = gameCanvasSize.height.toFloat(),
-                worldHeight = GameConfig.WORLD_HEIGHT,
+                worldHeight = ArenaCameraStyle.VISIBLE_WORLD_HEIGHT,
+                worldWidth = GameConfig.WORLD_WIDTH,
+                arenaHeight = GameConfig.WORLD_HEIGHT,
                 cameraX = gameState.cameraX,
                 cameraY = gameState.cameraY,
                 shakeX = gameFeelSystem.shakeOffsetX,
@@ -866,17 +868,10 @@ private fun GameCanvasView(
         val toScreenX: (Float) -> Float = transform::worldToScreenX
         val toScreenY: (Float) -> Float = transform::worldToScreenY
         val toScreenR: (Float) -> Float = { worldRadius -> worldRadius * transform.scale }
-        val camX = transform.worldToScreenX(0f)
-        val camY = transform.worldToScreenY(0f)
-
         drawGameBackground(
             gameState,
-            toScreenX,
-            toScreenY,
-            toScreenR,
-            transform.scale,
-            camX,
-            camY
+            transform,
+            toScreenR
         )
         drawEntities(gameState, culler, toScreenX, toScreenY, toScreenR)
         drawParticles(particleSystem, culler, toScreenX, toScreenY, toScreenR)
@@ -897,17 +892,14 @@ private fun GameCanvasView(
 }
 
 /**
- * Draws the game background: atmospheric sky/ground + chapter bitmap + soft grid.
- * Screen-space only so camera never "loses" the art under solid brown (#160).
+ * Draws the game background from one projected world origin. The gradient and
+ * vignette remain screen-space overlays, while the horizon, bitmap, grids,
+ * landmarks, and arena boundary receive deterministic world-space motion.
  */
 private fun DrawScope.drawGameBackground(
     state: GameState,
-    toScreenX: (Float) -> Float,
-    toScreenY: (Float) -> Float,
-    toScreenR: (Float) -> Float,
-    scale: Float,
-    camX: Float,
-    camY: Float
+    transform: VisibleWorldTransform,
+    toScreenR: (Float) -> Float
 ) {
     val minute = state.elapsedSeconds / 60f
     val palette = ArenaBackgroundStyle.chapterPalette(minute)
@@ -925,34 +917,57 @@ private fun DrawScope.drawGameBackground(
         )
     )
 
-    // Horizon silhouette band (ruins / trees / skyline) — always visible
-    drawHorizonSilhouettes(palette, camX)
+    val worldOrigin = backgroundOriginPx(transform)
+
+    // Horizon silhouette band (ruins / trees / skyline) — deterministic and
+    // independently parallaxed on both axes.
+    drawHorizonSilhouettes(
+        palette,
+        calculateBackgroundOffset(worldOrigin, ArenaParallaxLayers.HORIZON)
+    )
 
     val chapter = state.backgroundManager?.chapterForMinutes(minute)
     val img = chapter?.bitmap
     if (img != null) {
         val tileW = size.width
         val tileH = size.height
-        val scrollX = ((camX * 0.08f) % tileW + tileW) % tileW
-        // Soft multiply-ish blend — keep sky gradient visible
+        val bitmapOffset = calculateBackgroundOffset(worldOrigin, ArenaParallaxLayers.BITMAP)
+        val startX = wrapBackgroundPhasePx(bitmapOffset.x, tileW) - tileW
+        val startY = wrapBackgroundPhasePx(bitmapOffset.y, tileH) - tileH
+        // Tile both axes so vertical camera movement cannot expose an empty band.
         for (ox in -1..1) {
-            drawImage(
-                image = img,
-                dstOffset = androidx.compose.ui.unit.IntOffset(
-                    (-scrollX + ox * tileW).toInt(),
-                    0
-                ),
-                dstSize = androidx.compose.ui.unit.IntSize(tileW.toInt(), tileH.toInt()),
-                alpha = 0.38f
-            )
+            for (oy in -1..1) {
+                drawImage(
+                    image = img,
+                    dstOffset = androidx.compose.ui.unit.IntOffset(
+                        (startX + ox * tileW).toInt(),
+                        (startY + oy * tileH).toInt()
+                    ),
+                    dstSize = androidx.compose.ui.unit.IntSize(tileW.toInt(), tileH.toInt()),
+                    alpha = ArenaBackgroundStyle.CHAPTER_BITMAP_ALPHA
+                )
+            }
         }
     }
 
-    // Soft floor grid only on lower 55% so sky stays clean
-    val g = palette.grid.copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_SECONDARY)
-    val g2 = palette.grid.copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_PRIMARY)
-    drawParallaxGrid(camX * 0.35f, camY * 0.2f, 160f, g, floorOnly = true)
-    drawParallaxGrid(camX, camY * 0.35f, 110f, g2, floorOnly = true)
+    // Soft floor grids only on lower 55% so sky stays clean.
+    val secondaryGrid = palette.grid.copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_SECONDARY)
+    val worldGrid = palette.grid.copy(alpha = ArenaBackgroundStyle.GRID_ALPHA_PRIMARY)
+    drawParallaxGrid(
+        calculateBackgroundOffset(worldOrigin, ArenaParallaxLayers.SECONDARY_GRID),
+        160f,
+        secondaryGrid,
+        floorOnly = true
+    )
+    drawParallaxGrid(
+        calculateBackgroundOffset(worldOrigin, ArenaParallaxLayers.WORLD_GRID),
+        110f,
+        worldGrid,
+        floorOnly = true
+    )
+
+    // World-space detail stays aligned with entities and touch placement.
+    drawArenaWorldDetails(palette, transform, toScreenR)
 
     val vig = ArenaBackgroundStyle.VIGNETTE_ALPHA
     drawRect(
@@ -969,28 +984,28 @@ private fun DrawScope.drawGameBackground(
 
 private fun DrawScope.drawHorizonSilhouettes(
     palette: ArenaBackgroundStyle.Palette,
-    camX: Float
+    offset: BackgroundOffsetPx
 ) {
-    val horizonY = size.height * 0.55f
-    val groundH = size.height - horizonY
-    // Soft haze line
+    val horizonY = size.height * 0.55f + offset.y
+    val groundH = (size.height - horizonY).coerceAtLeast(0f)
+    // Soft haze line.
     drawRect(
         color = palette.haze.copy(alpha = 0.22f),
         topLeft = Offset(0f, horizonY - 18f),
         size = Size(size.width, 36f)
     )
-    val seed = ((camX * 0.05f).toInt() + 17)
-    var x = -40f - (camX * 0.15f % 90f)
+    val spacing = 92f
+    var x = wrapBackgroundPhasePx(offset.x, spacing) - spacing
     var i = 0
     while (x < size.width + 80f) {
-        val h = 40f + ((seed + i * 37) % 90)
-        val w = 28f + ((seed + i * 13) % 40)
+        val h = 48f + (i % 4) * 19f
+        val w = 34f + (i % 3) * 17f
         drawRect(
             color = palette.silhouette.copy(alpha = 0.85f),
             topLeft = Offset(x, horizonY - h),
             size = Size(w, h + groundH * 0.08f)
         )
-        // jagged peak
+        // Jagged peak: the repeating sequence is deterministic at every phase.
         val path = androidx.compose.ui.graphics.Path().apply {
             moveTo(x, horizonY - h)
             lineTo(x + w * 0.35f, horizonY - h - 18f - (i % 5) * 4f)
@@ -1003,30 +1018,110 @@ private fun DrawScope.drawHorizonSilhouettes(
     }
 }
 
-/**
- * Draws a parallax grid layer offset by camera position.
- */
+/** Draws one repeating grid layer with independent two-axis phase. */
 private fun DrawScope.drawParallaxGrid(
-    offsetX: Float,
-    offsetY: Float,
+    offset: BackgroundOffsetPx,
     gridSize: Float,
     color: Color,
     floorOnly: Boolean = false
 ) {
     val minY = if (floorOnly) size.height * 0.55f else 0f
-    val startX = -offsetX % gridSize - gridSize
-    val startY = -offsetY % gridSize - gridSize
+    val startX = wrapBackgroundPhasePx(offset.x, gridSize) - gridSize
+    val startY = wrapBackgroundPhasePx(offset.y, gridSize) - gridSize
     var x = startX
     while (x < size.width + gridSize) {
         drawLine(color, Offset(x, minY), Offset(x, size.height), strokeWidth = 1f)
         x += gridSize
     }
-    var y = maxOf(startY, minY)
+    var y = startY
     while (y < size.height + gridSize) {
         if (y >= minY) {
             drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
         }
         y += gridSize
+    }
+}
+
+/** Draws fixed landmarks, ground ticks, and the complete arena boundary. */
+private fun DrawScope.drawArenaWorldDetails(
+    palette: ArenaBackgroundStyle.Palette,
+    transform: VisibleWorldTransform,
+    toScreenR: (Float) -> Float
+) {
+    val left = transform.worldToScreenX(0f)
+    val right = transform.worldToScreenX(ArenaWorldEnvironment.WORLD_WIDTH)
+    val top = transform.worldToScreenY(0f)
+    val bottom = transform.worldToScreenY(ArenaWorldEnvironment.WORLD_HEIGHT)
+    val boundaryColor = palette.haze.copy(alpha = 0.78f)
+    val boundaryStroke = toScreenR(ArenaWorldEnvironment.BOUNDARY_STROKE_WORLD).coerceAtLeast(1f)
+    drawLine(boundaryColor, Offset(left, top), Offset(right, top), boundaryStroke)
+    drawLine(boundaryColor, Offset(right, top), Offset(right, bottom), boundaryStroke)
+    drawLine(boundaryColor, Offset(right, bottom), Offset(left, bottom), boundaryStroke)
+    drawLine(boundaryColor, Offset(left, bottom), Offset(left, top), boundaryStroke)
+
+    // Repeated world-locked ground ticks make camera translation legible even
+    // when no entity is near the viewport.
+    val groundColor = palette.grid.copy(alpha = 0.16f)
+    for (worldX in 64..(ArenaWorldEnvironment.WORLD_WIDTH.toInt() - 64) step 128) {
+        val x = transform.worldToScreenX(worldX.toFloat())
+        val y = transform.worldToScreenY(ArenaWorldEnvironment.WORLD_HEIGHT - 54f)
+        drawLine(
+            groundColor,
+            Offset(x, y),
+            Offset(x + toScreenR(18f), y),
+            strokeWidth = toScreenR(2f).coerceAtLeast(1f)
+        )
+    }
+
+    for (landmark in ArenaWorldEnvironment.LANDMARKS) {
+        val x = transform.worldToScreenX(landmark.x)
+        val y = transform.worldToScreenY(landmark.y)
+        val width = landmark.width * transform.scale
+        val height = landmark.height * transform.scale
+        val fill = when (landmark.kind) {
+            ArenaLandmark.Kind.WATCHTOWER -> palette.silhouette
+            ArenaLandmark.Kind.CRATE -> Color(0xFF9A6B43)
+            ArenaLandmark.Kind.ROCK -> Color(0xFF68727A)
+            ArenaLandmark.Kind.BEACON -> Color(0xFFE5B85C)
+        }
+        when (landmark.kind) {
+            ArenaLandmark.Kind.WATCHTOWER,
+            ArenaLandmark.Kind.CRATE -> {
+                drawRect(
+                    color = fill.copy(alpha = 0.9f),
+                    topLeft = Offset(x - width / 2f, y - height / 2f),
+                    size = Size(width, height)
+                )
+                drawLine(
+                    Color.White.copy(alpha = 0.28f),
+                    Offset(x - width / 2f, y - height / 2f),
+                    Offset(x + width / 2f, y + height / 2f),
+                    strokeWidth = toScreenR(2f).coerceAtLeast(1f)
+                )
+                drawLine(
+                    Color.White.copy(alpha = 0.28f),
+                    Offset(x + width / 2f, y - height / 2f),
+                    Offset(x - width / 2f, y + height / 2f),
+                    strokeWidth = toScreenR(2f).coerceAtLeast(1f)
+                )
+            }
+            ArenaLandmark.Kind.ROCK -> {
+                drawOval(
+                    color = fill.copy(alpha = 0.9f),
+                    topLeft = Offset(x - width / 2f, y - height / 2f),
+                    size = Size(width, height)
+                )
+            }
+            ArenaLandmark.Kind.BEACON -> {
+                drawLine(
+                    fill.copy(alpha = 0.9f),
+                    Offset(x, y + height / 2f),
+                    Offset(x, y - height / 2f),
+                    strokeWidth = toScreenR(5f).coerceAtLeast(1f)
+                )
+                drawCircle(fill.copy(alpha = 0.95f), toScreenR(9f), Offset(x, y - height / 2f))
+            }
+        }
     }
 }
 
