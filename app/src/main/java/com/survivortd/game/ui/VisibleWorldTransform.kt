@@ -1,16 +1,22 @@
 package com.survivortd.game.ui
 
+import com.survivortd.game.config.GameConfig
+
 /**
  * Immutable projection between world coordinates and the visible canvas.
  *
- * The canvas height always represents [worldHeight] world units. Camera shake is
- * expressed in world units and moves rendered content in the shake direction,
- * so the world position at the canvas center is the camera position minus shake.
+ * The canvas height always represents [worldHeight] world units. [cameraX] and
+ * [cameraY] are the player-follow target (the camera anchor); the anchor is
+ * clamped to the fixed arena before camera shake is applied. Every world-space
+ * consumer — entities, projectiles, tower placement, minimap, touch conversion,
+ * and environment detail — must use this immutable projection.
  */
 data class VisibleWorldTransform(
     val canvasWidth: Float,
     val canvasHeight: Float,
     val worldHeight: Float,
+    val worldWidth: Float = GameConfig.WORLD_WIDTH,
+    val arenaHeight: Float = GameConfig.WORLD_HEIGHT,
     val cameraX: Float,
     val cameraY: Float,
     val shakeX: Float,
@@ -25,11 +31,17 @@ data class VisibleWorldTransform(
     /** Height of the canvas viewport in world units. */
     val visibleWorldHeight: Float = canvasHeight / scale
 
+    /** Bounded follow target; the unshaken viewport never exposes space beyond the arena. */
+    val cameraAnchorX: Float = boundedCameraCenter(cameraX, visibleWorldWidth, worldWidth)
+
+    /** Bounded follow target; axes whose viewport spans the world remain centered. */
+    val cameraAnchorY: Float = boundedCameraCenter(cameraY, visibleWorldHeight, arenaHeight)
+
     /** World-space x-coordinate displayed at the horizontal canvas center. */
-    val visibleCenterX: Float = cameraX - shakeX
+    val visibleCenterX: Float = cameraAnchorX - shakeX
 
     /** World-space y-coordinate displayed at the vertical canvas center. */
-    val visibleCenterY: Float = cameraY - shakeY
+    val visibleCenterY: Float = cameraAnchorY - shakeY
 
     /** Projects a world-space x-coordinate into canvas coordinates. */
     fun worldToScreenX(worldX: Float): Float =
@@ -61,6 +73,14 @@ data class VisibleWorldTransform(
             bottom = visibleCenterY + halfHeight
         )
     }
+}
+
+private fun boundedCameraCenter(target: Float, viewportExtent: Float, worldExtent: Float): Float {
+    require(target.isFinite() && viewportExtent.isFinite() && worldExtent.isFinite())
+    require(viewportExtent > 0f && worldExtent > 0f)
+    if (viewportExtent >= worldExtent) return worldExtent / 2f
+    val halfViewport = viewportExtent / 2f
+    return target.coerceIn(halfViewport, worldExtent - halfViewport)
 }
 
 /** Axis-aligned world-space viewport bounds. */

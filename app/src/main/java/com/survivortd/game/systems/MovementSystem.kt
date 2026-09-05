@@ -5,6 +5,18 @@ import com.survivortd.game.config.GameConfig
 import com.survivortd.game.core.GameState
 import kotlin.math.sqrt
 
+object CameraFollowConfig {
+    const val DEAD_ZONE_HALF_EXTENT: Float = 32f
+}
+
+internal fun followCameraAxis(current: Float, target: Float): Float = when {
+    target > current + CameraFollowConfig.DEAD_ZONE_HALF_EXTENT ->
+        target - CameraFollowConfig.DEAD_ZONE_HALF_EXTENT
+    target < current - CameraFollowConfig.DEAD_ZONE_HALF_EXTENT ->
+        target + CameraFollowConfig.DEAD_ZONE_HALF_EXTENT
+    else -> current
+}
+
 /**
  * Movement system — player (analog joystick) + enemies (AI velocity integrate).
  *
@@ -63,8 +75,10 @@ class MovementSystem(
         pos.x = pos.x.coerceIn(0f, GameConfig.WORLD_WIDTH)
         pos.y = pos.y.coerceIn(0f, GameConfig.WORLD_HEIGHT)
 
-        state.cameraX = pos.x
-        state.cameraY = pos.y
+        // Keep small player movements inside a stable world-space dead zone;
+        // VisibleWorldTransform independently applies viewport/arena bounds.
+        state.cameraX = followCameraAxis(state.cameraX, pos.x)
+        state.cameraY = followCameraAxis(state.cameraY, pos.y)
 
         if (player.isDashing) {
             player.dashTimer -= dt

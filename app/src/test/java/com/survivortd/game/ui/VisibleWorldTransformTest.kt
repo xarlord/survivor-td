@@ -1,6 +1,7 @@
 package com.survivortd.game.ui
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class VisibleWorldTransformTest {
@@ -123,6 +124,61 @@ class VisibleWorldTransformTest {
             val world = transform.screenToWorld(screen.first, screen.second)
             assertPointEquals(screen, transform.worldToScreen(world.first, world.second))
         }
+    }
+
+    @Test
+    fun `camera anchor follows target on both axes while remaining inside world bounds`() {
+        val transform = VisibleWorldTransform(
+            canvasWidth = 500f,
+            canvasHeight = 500f,
+            worldHeight = 500f,
+            worldWidth = 1280f,
+            arenaHeight = 720f,
+            cameraX = 680f,
+            cameraY = 400f,
+            shakeX = 0f,
+            shakeY = 0f
+        )
+
+        assertEquals(680f, transform.visibleCenterX, EPSILON)
+        assertEquals(400f, transform.visibleCenterY, EPSILON)
+    }
+
+    @Test
+    fun `camera anchor keeps the entire viewport inside fixed world bounds`() {
+        val transform = VisibleWorldTransform(
+            canvasWidth = 500f,
+            canvasHeight = 500f,
+            worldHeight = 720f,
+            worldWidth = 1280f,
+            cameraX = -200f,
+            cameraY = 900f,
+            shakeX = 0f,
+            shakeY = 0f
+        )
+
+        val halfViewport = transform.visibleWorldWidth / 2f
+        assertEquals(halfViewport, transform.visibleCenterX, EPSILON)
+        assertEquals(720f - transform.visibleWorldHeight / 2f, transform.visibleCenterY, EPSILON)
+        assertEquals(0f, transform.visibleWorldBounds().left, EPSILON)
+        assertEquals(720f, transform.visibleWorldBounds().bottom, EPSILON)
+    }
+
+    @Test
+    fun `camera centers an axis when viewport is larger than the world`() {
+        val transform = VisibleWorldTransform(
+            canvasWidth = 1600f,
+            canvasHeight = 500f,
+            worldHeight = 720f,
+            worldWidth = 1280f,
+            cameraX = 200f,
+            cameraY = 360f,
+            shakeX = 0f,
+            shakeY = 0f
+        )
+
+        assertTrue(transform.visibleWorldWidth > transform.worldWidth)
+        assertEquals(640f, transform.visibleCenterX, EPSILON)
     }
 
     private fun portraitTransform() = VisibleWorldTransform(

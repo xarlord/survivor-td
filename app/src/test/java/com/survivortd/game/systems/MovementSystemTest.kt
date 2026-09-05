@@ -100,11 +100,27 @@ class MovementSystemTest {
     }
 
     @Test
-    @DisplayName("Camera follows player")
-    fun cameraFollowsPlayer() {
+    @DisplayName("Camera uses a stable dead zone before following player on both axes")
+    fun cameraFollowsPlayerWithDeadZone() {
+        val startCameraX = state.cameraX
+        val startCameraY = state.cameraY
+
         state.joystickX = 1f
-        movement.update(1f)
-        assertEquals(state.positions[state.playerIndex].x, state.cameraX, 1f)
+        movement.update(0.1f)
+        assertEquals(startCameraX, state.cameraX, 0.1f)
+        assertEquals(startCameraY, state.cameraY, 0.1f)
+
+        movement.update(0.2f)
+        val playerX = state.positions[state.playerIndex].x
+        assertTrue(state.cameraX > startCameraX)
+        assertEquals(CameraFollowConfig.DEAD_ZONE_HALF_EXTENT, playerX - state.cameraX, 0.1f)
+
+        state.joystickX = 0f
+        state.joystickY = -1f
+        movement.update(0.3f)
+        val playerY = state.positions[state.playerIndex].y
+        assertTrue(state.cameraY < startCameraY)
+        assertEquals(CameraFollowConfig.DEAD_ZONE_HALF_EXTENT, state.cameraY - playerY, 0.1f)
     }
 
     @Test
