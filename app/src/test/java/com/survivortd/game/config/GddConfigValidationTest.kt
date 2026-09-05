@@ -315,11 +315,20 @@ class GddConfigValidationTest {
         fun passiveCount() = assertEquals(12, PassiveType.entries.size)
 
         @Test
-        @DisplayName("Each passive is a catalyst for exactly one weapon")
-        fun allPassivesHaveCatalysts() {
-            for (p in PassiveType.entries) {
-                assertTrue(p.catalystFor != null, "${p.displayName} should be a catalyst for a weapon")
-            }
+        @DisplayName("Each passive maps one-to-one onto all weapon catalyst targets")
+        fun allPassivesHaveUniqueCatalysts() {
+            val catalystTargets = PassiveType.entries.map { it.catalystFor }
+
+            assertEquals(
+                PassiveType.entries.size,
+                catalystTargets.toSet().size,
+                "Each passive should target a different weapon evolution"
+            )
+            assertEquals(
+                WeaponType.entries.toSet(),
+                catalystTargets.toSet(),
+                "Every weapon should have exactly one passive catalyst"
+            )
         }
     }
 
